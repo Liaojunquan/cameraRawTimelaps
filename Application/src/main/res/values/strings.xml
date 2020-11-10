@@ -16,5 +16,5 @@
 <resources>
     <string name="picture">Picture</string>
     <string name="description_info">Info</string>
-    <string name="request_permission">This app needs camera permission.</string>
+    <string name="request_permission">此软件需要一些权限This app needs camera permission.</string>
 </resources>

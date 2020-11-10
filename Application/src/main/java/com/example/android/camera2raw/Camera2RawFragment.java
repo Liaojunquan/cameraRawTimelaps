@@ -57,6 +57,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
+import android.os.StatFs;
 import android.os.StrictMode;
 import android.os.SystemClock;
 import android.os.storage.StorageManager;
@@ -78,6 +79,10 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.CompoundButton;
+import android.widget.ImageButton;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -96,6 +101,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
@@ -113,6 +119,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static android.app.Activity.RESULT_OK;
+import static android.content.Context.MODE_PRIVATE;
 
 /**
  * 演示使用Camera2 API捕获原始和JPEG照片的片段
@@ -138,12 +145,12 @@ import static android.app.Activity.RESULT_OK;
  * </li>
  * </ul>
  */
-public class Camera2RawFragment extends Fragment implements View.OnClickListener, FragmentCompat.OnRequestPermissionsResultCallback{
+public class Camera2RawFragment extends Fragment implements View.OnClickListener, FragmentCompat.OnRequestPermissionsResultCallback {
 
      //从屏幕旋转到JPEG方向的转换
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
-    private boolean isLock = false;
-    private RunOnUiThread runOnUiThread = new RunOnUiThread();
+    private boolean isLock = false;         //是否为手动模式
+    private final RunOnUiThread runOnUiThread = new RunOnUiThread();
     private TextView iso;
     private TextView speed;
     private TextView wb;
@@ -166,11 +173,26 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     private boolean saveJPEG = false;
     private boolean saveRAW = true;
     private boolean isTakePhoto = false;
-    public static String savePath = "/storage/emulated/0/DCIM";
-    public Date dataNow = new Date();
-    public BigInteger time_of_onec_shoot = BigInteger.valueOf(dataNow.getTime());
-    public BigInteger time_tmp = time_of_onec_shoot;
-    public BigInteger time_remove = time_of_onec_shoot;
+    private static String savePath = "/storage/emulated/0/DCIM";
+    private Date dataNow = new Date();
+    private BigInteger time_of_once_shoot = BigInteger.valueOf(dataNow.getTime());
+    private BigInteger time_tmp = time_of_once_shoot;
+    private BigInteger time_remove = time_of_once_shoot;
+    private boolean isSaveFinished = false;
+    private StatFs sf;
+    private long availableBytesSize = 0l;
+    private Button StartAndStopButton;
+    private ImageButton AutoOrManual;
+    //private File isSaveDngFile;
+    private static boolean saveDng = false;
+    //public Activity C2RF = getActivity();
+    private Size jpegSize;
+    private TextView t_size;
+    private TextView t_format;
+    private ImageButton whitebalance_btn;
+    private boolean isExtremeMode = false;
+    private TextView t_mode;
+    private long lastButtonClickTime = 0l;
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 0);
@@ -223,30 +245,66 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             public void run() {
                 takePicture();
                 while (shoot){
-                    File f = new File(savePath + "/RAW_" + getFrameNumString() + ".raw");
-                    if(f.exists()){
-                        FileInputStream file_size_test = null;
-                        int size = 0;
-                        try{
-                            file_size_test = new FileInputStream(f);
-                            size = file_size_test.available();
-                        } catch (IOException e){
-                            e.printStackTrace();
-                        } finally {
-                            closeInput(file_size_test);
+                    if(isExtremeMode){               //极限模式Extreme mode
+                        if(saveDng){
+                            File f = new File(savePath + "/DNG_" + getFrameNumString() + ".dng");
+                            if(f.exists()){
+                                FileInputStream file_size_test = null;
+                                int size = 0;
+                                try{
+                                    file_size_test = new FileInputStream(f);
+                                    size = file_size_test.available();
+                                } catch (IOException e){
+                                    e.printStackTrace();
+                                } finally {
+                                    closeInput(file_size_test);
+                                    f = null;
+                                }
+                                if(size > 0){
+                                    takePicture();
+                                    Log.d(TAG,"触发");
+                                }
+                                sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                                availableBytesSize = sf.getAvailableBytes();
+                                if(saveJPEG)      //JPEG+DNG
+                                    runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/28860416l));
+                                else       //DNG
+                                    runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));
+                            }
                         }
-                        if(size > 0){
-                            takePicture();
+                        else if(isSaveFinished){
+                            sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                            availableBytesSize = sf.getAvailableBytes();
+                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));    //JPEG or RAW
+                            isSaveFinished = false;
                             Log.d(TAG,"触发");
+                            takePicture();
+                        }
+                        try{
+                            //Thread.sleep(interval*1000);
+                            Thread.sleep(100);         //尝试10fps
+                        }catch (InterruptedException e){
+                            e.printStackTrace();
                         }
                     }
-                    //mPendingUserCaptures++;
-                    //takePicture();
-                    try{
-                        //Thread.sleep(interval*1000);
-                        Thread.sleep(100);         //尝试10fps
-                    }catch (InterruptedException e){
-                        e.printStackTrace();
+                    else {                         //延时摄影模式Timelaps mode
+                        sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                        availableBytesSize = sf.getAvailableBytes();
+                        if(saveJPEG && !saveRAW && !saveDng)
+                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
+                        else if(!saveJPEG && saveRAW && !saveDng)
+                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
+                        else if(saveJPEG && !saveRAW && saveDng)
+                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/28860416l));
+                        else if(!saveJPEG && !saveRAW && saveDng)
+                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));
+                        try{
+                            Thread.sleep(interval*1000);
+                            //Thread.sleep(100);         //尝试10fps
+                        }catch (InterruptedException e){
+                            e.printStackTrace();
+                        }
+                        takePicture();
                     }
                 }
                 Thread.interrupted();
@@ -259,7 +317,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             public void run() {
                 int t = interval;
                 while (shoot){
-                    //runOnUiThread.UpdateText(R.id.text_time,Integer.toString(t));
+                    runOnUiThread.UpdateText(R.id.text_time,Integer.toString(t));
                     try {
                         Thread.sleep(1000);
                     }catch (InterruptedException e){
@@ -292,7 +350,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         return "1/"+s_s;
     }
 
-    public void clearMemory(Context context) {
+    /*public void clearMemory(Context context) {
         ActivityManager activityManger = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         List<ActivityManager.RunningAppProcessInfo> list = activityManger.getRunningAppProcesses();
         if (list != null) {
@@ -309,7 +367,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         }else {
             Log.d(TAG,"无法获取内存信息");
         }
-    }
+    }*/
 
     public static void setPath(String path){
         savePath = path;
@@ -387,7 +445,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
      * its {@link Image}s have completed.
      */
     private RefCountedAutoCloseable<ImageReader> mRawImageReader;  //包装处理RAW图像捕获
-    private boolean mNoAFRun = false; //当前配置的相机设备是否为定焦
+    private boolean mNoAFRun = false; //当前配置的相机设备是否支持自动对焦
     private int mPendingUserCaptures = 0;  //捕获照片的未决用户请求数Number of pending user requests to capture a photo.
     private final TreeMap<Integer, ImageSaver.ImageSaverBuilder> mJpegResultQueue = new TreeMap<>(); //为正在进行的JPEG捕获请求ID到{@link ImageSaver.ImageSaverBuilder}的映射
     private final TreeMap<Integer, ImageSaver.ImageSaverBuilder> mRawResultQueue = new TreeMap<>(); ////为正在进行的RAW捕获请求ID到{@link ImageSaver.ImageSaverBuilder}的映射
@@ -588,83 +646,96 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         @Override
         public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request,
                                      long timestamp, long frameNumber) {
-            /*String currentDateTime = generateTimestamp();
-            File rawFile = new File(Environment.
-                    getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "RAW_" + currentDateTime + ".dng");
-            File jpegFile = new File(Environment.
-                    getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "JPEG_" + currentDateTime + ".jpg");*/
-            String currentFrame = getFrameNumString();
-            /*File rawFile = new File(Environment.
-                    getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "RAW_" + currentFrame + ".dng");
-            File jpegFile = new File(Environment.
-                    getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "JPEG_" + currentFrame + ".jpg");*/
-            File rawFile = new File(savePath + "/RAW_" + currentFrame + ".raw");
-            File jpegFile = new File(savePath + "/JPEG_" + currentFrame + ".jpg");
-            // Look up the ImageSaverBuilder for this request and update it with the file name
-            // based on the capture start time.
-            ImageSaver.ImageSaverBuilder jpegBuilder;
-            ImageSaver.ImageSaverBuilder rawBuilder;
-            int requestId = (int) request.getTag();
-            synchronized (mCameraStateLock) {
-                jpegBuilder = mJpegResultQueue.get(requestId);
-                rawBuilder = mRawResultQueue.get(requestId);
-            }
 
-            if (jpegBuilder != null) jpegBuilder.setFile(jpegFile);
-            if (rawBuilder != null) rawBuilder.setFile(rawFile);
+            String currentFrame = getFrameNumString();
+            int requestId = (int) request.getTag();
+            if(saveJPEG){
+                File jpegFile = new File(savePath + "/JPEG_" + currentFrame + ".jpg");
+                // Look up the ImageSaverBuilder for this request and update it with the file name
+                // based on the capture start time.
+                ImageSaver.ImageSaverBuilder jpegBuilder;
+                synchronized (mCameraStateLock) {
+                    jpegBuilder = mJpegResultQueue.get(requestId);
+                }
+                if (jpegBuilder != null) jpegBuilder.setFile(jpegFile);
+            }
+            if (saveRAW || saveDng){
+                File rawFile;
+                if(saveDng)
+                    rawFile = new File(savePath + "/DNG_" + currentFrame + ".dng");
+                else
+                    rawFile = new File(savePath + "/RAW_" + currentFrame + ".raw");
+                // Look up the ImageSaverBuilder for this request and update it with the file name
+                // based on the capture start time.
+                ImageSaver.ImageSaverBuilder rawBuilder;
+                synchronized (mCameraStateLock) {
+                    rawBuilder = mRawResultQueue.get(requestId);
+                }
+                if (rawBuilder != null) rawBuilder.setFile(rawFile);
+            }
         }
 
         @Override
         public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                        TotalCaptureResult result) {
+
+            //StringBuilder sb = new StringBuilder();
             int requestId = (int) request.getTag();
-            ImageSaver.ImageSaverBuilder jpegBuilder;
-            ImageSaver.ImageSaverBuilder rawBuilder;
-            StringBuilder sb = new StringBuilder();
-
-            // Look up the ImageSaverBuilder for this request and update it with the CaptureResult
-            synchronized (mCameraStateLock) {
-                jpegBuilder = mJpegResultQueue.get(requestId);
-                rawBuilder = mRawResultQueue.get(requestId);
-
-                if (jpegBuilder != null && saveJPEG == true) {
-                    jpegBuilder.setResult(result);
-                    sb.append("Saving JPEG as: ");
-                    sb.append(jpegBuilder.getSaveLocation());
+            if(saveJPEG){
+                ImageSaver.ImageSaverBuilder jpegBuilder;
+                // Look up the ImageSaverBuilder for this request and update it with the CaptureResult
+                synchronized (mCameraStateLock) {
+                    jpegBuilder = mJpegResultQueue.get(requestId);
+                    if (jpegBuilder != null) {
+                        jpegBuilder.setResult(result);
+                        /*sb.append("Saving JPEG as: ");
+                        sb.append(jpegBuilder.getSaveLocation());*/
+                    }
+                    // If we have all the results necessary, save the image to a file in the background.
+                    handleCompletionLocked(requestId, jpegBuilder, mJpegResultQueue);
                 }
-                if (rawBuilder != null && saveRAW == true) {
-                    rawBuilder.setResult(result);
-                    if (jpegBuilder != null) sb.append(", ");
-                    sb.append("Saving RAW as: ");
-                    sb.append(rawBuilder.getSaveLocation());
-                }
-
-                // If we have all the results necessary, save the image to a file in the background.
-                handleCompletionLocked(requestId, jpegBuilder, mJpegResultQueue);
-                handleCompletionLocked(requestId, rawBuilder, mRawResultQueue);
-
-                finishedCaptureLocked();
             }
-            showToast(sb.toString());
+            if(saveRAW || saveDng){
+                ImageSaver.ImageSaverBuilder rawBuilder;
+                // Look up the ImageSaverBuilder for this request and update it with the CaptureResult
+                synchronized (mCameraStateLock) {
+                    rawBuilder = mRawResultQueue.get(requestId);
+                    if (rawBuilder != null) {
+                        rawBuilder.setResult(result);
+                        /*if(saveRAW)
+                            sb.append("Saving RAW as: ");
+                        if(saveDng)
+                            sb.append("Saving DNG as: ");
+                        sb.append(rawBuilder.getSaveLocation());*/
+                    }
+                    // If we have all the results necessary, save the image to a file in the background.
+                    handleCompletionLocked(requestId, rawBuilder, mRawResultQueue);
+                }
+            }
+            finishedCaptureLocked();
+            //showToast(sb.toString());
         }
 
         @Override
         public void onCaptureFailed(CameraCaptureSession session, CaptureRequest request,
                                     CaptureFailure failure) {
             int requestId = (int) request.getTag();
-            synchronized (mCameraStateLock) {
-                mJpegResultQueue.remove(requestId);
-                mRawResultQueue.remove(requestId);
-                finishedCaptureLocked();
+            if(saveJPEG){
+                synchronized (mCameraStateLock) {
+                    mJpegResultQueue.remove(requestId);
+
+                }
             }
+            if (saveRAW || saveDng){
+                synchronized (mCameraStateLock) {
+                    mRawResultQueue.remove(requestId);
+
+                }
+            }
+            finishedCaptureLocked();
             showToast("Capture failed! Error Code: "+failure.getReason());  //0表示在框架中出错
             // 1表示由于 CameraCaptureSession.abortCaptures的执行而产生的错误
         }
-
     };
 
     /**
@@ -700,6 +771,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         view.findViewById(R.id.interval_button_plus).setOnClickListener(this);
         view.findViewById(R.id.interval_button_sub).setOnClickListener(this);
         view.findViewById(R.id.menu_btn).setOnClickListener(this);
+        StartAndStopButton = (Button) view.findViewById(R.id.picture);
+        AutoOrManual = (ImageButton) view.findViewById(R.id.info);
         iso = (TextView)view.findViewById(R.id.iso_text);
         speed = (TextView)view.findViewById(R.id.speed_text);
         wb = (TextView)view.findViewById(R.id.wb_text);
@@ -707,63 +780,71 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         photoNum = (TextView)view.findViewById(R.id.text_pNum);
         time_I = (TextView)view.findViewById(R.id.text_time);
+        sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+        availableBytesSize = sf.getAvailableBytes();
+        t_format = (TextView)view.findViewById(R.id.text_format);
+        t_size = (TextView)view.findViewById(R.id.text_size);
+        whitebalance_btn = (ImageButton)view.findViewById(R.id.wb_button) ;
+        t_mode = (TextView)view.findViewById(R.id.text_mode);
 
         view.findViewById(R.id.texture).setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()){
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_DOWN:
-                        lastX = (int)event.getX();
-                        lastY = (int)event.getY();
-                        //Log.d(TAG,Integer.toString(posX)+","+Integer.toString(posY));
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        posX = (int)event.getX();
-                        posY = (int)event.getY();
-                        if(posY < 500){
+                if(isLock){
+                    switch (event.getAction()){
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_DOWN:
+                            lastX = (int)event.getX();
+                            lastY = (int)event.getY();
+                            //Log.d(TAG,Integer.toString(posX)+","+Integer.toString(posY));
+                            break;
+                        case MotionEvent.ACTION_MOVE:
+                            posX = (int)event.getX();
+                            posY = (int)event.getY();
+                            if(posY < 500){
                             /*if((posX - lastX) > 5 && speed_now_index > 0)
                                 speed_now_index--;
                             else if((posX - lastX) < -5 && speed_now_index < SPEED.length-1)
                                 speed_now_index++;
                             runOnUiThread.UpdateText(R.id.speed_text,SPEED_STRING[speed_now_index]);*/
-                            if((posX - lastX) > 8 && SPEED < 1000000000L) {     //小于1s
-                                if(SPEED>10000000L)
-                                    SPEED = SPEED + 1000000L;
-                                else
-                                    SPEED = SPEED + 50000L;
+                                if((posX - lastX) > 8 && SPEED < 1000000000L) {     //小于1s
+                                    if(SPEED>10000000L)
+                                        SPEED = SPEED + 1000000L;
+                                    else
+                                        SPEED = SPEED + 50000L;
+                                }
+                                else if ((posX - lastX) < -8 && SPEED > 250000L) {  //大于1/40000s
+                                    if(SPEED>10000000L)
+                                        SPEED = SPEED - 1000000L;
+                                    else
+                                        SPEED = SPEED - 50000L;
+                                }
+                                runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
+                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,SPEED);
+                            }else {
+                                if((posX - lastX) > 1 && nowFocusDistant > 0.0f)
+                                    nowFocusDistant -= 0.07f;
+                                else if((posX - lastX) < -1 && nowFocusDistant < 10.0f)
+                                    nowFocusDistant += 0.07f;
+                                mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
                             }
-                            else if ((posX - lastX) < -8 && SPEED > 250000L) {  //大于1/40000s
-                                if(SPEED>10000000L)
-                                    SPEED = SPEED - 1000000L;
-                                else
-                                    SPEED = SPEED - 50000L;
+                            Log.d(TAG,"speed "+Long.toString(SPEED));
+                            Log.d(TAG,"Distant "+Float.toString(nowFocusDistant));
+                            lastX = posX;
+                            lastY = posY;
+                            try {
+                                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
+                                        mBackgroundHandler);
+                                mCaptureSession.capture(mPreviewRequestBuilder.build(), mPreCaptureCallback,
+                                        mBackgroundHandler);
+                                //Log.d(TAG,Float.toString(nowFocusDistant));
+                            }catch (CameraAccessException e){
+                                e.printStackTrace();
                             }
-                            runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
-                            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,SPEED);
-                        }else {
-                            if((posX - lastX) > 1 && nowFocusDistant > 0.0f)
-                                nowFocusDistant -= 0.07f;
-                            else if((posX - lastX) < -1 && nowFocusDistant < 10.0f)
-                                nowFocusDistant += 0.07f;
-                            mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
-                        }
-                        Log.d(TAG,"speed "+Long.toString(SPEED));
-                        Log.d(TAG,"Distant "+Float.toString(nowFocusDistant));
-                        lastX = posX;
-                        lastY = posY;
-                        try {
-                            mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
-                                    mBackgroundHandler);
-                            mCaptureSession.capture(mPreviewRequestBuilder.build(), mPreCaptureCallback,
-                                    mBackgroundHandler);
-                            //Log.d(TAG,Float.toString(nowFocusDistant));
-                        }catch (CameraAccessException e){
-                            e.printStackTrace();
-                        }
-                        break;
-                    default:
-                        break;
+                            break;
+                        default:
+                            break;
+                    }
                 }
                 return true;
             }
@@ -784,15 +865,29 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     }
 
     @Override
+    public void onDestroy() {
+        if (mOrientationListener != null) {
+            mOrientationListener.disable();
+        }
+        shoot = false;
+        closeCamera();
+        stopBackgroundThread();
+        super.onDestroy();
+    }
+
+    @Override
+    public void onStart() {
+
+        super.onStart();
+    }
+
+    @Override
     public void onResume() {
-        super.onResume();
         if(!savePath.equals("/storage/emulated/0/DCIM")){
             if(DocumentsUtils.checkWritableRootPath(MyApplication.getContext(),savePath)){
                 showOpenDocumentTree();
             }
         }
-        startBackgroundThread();
-        openCamera();
         //runOnUiThread.UpdateText(R.id.text_time,Integer.toString(interval));
         File file = new File("/storage/self/primary/DCIM/FrameCount.dat");
         if(!file.exists()){
@@ -830,12 +925,96 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             }
         }
         file = null;
+        sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+        availableBytesSize = sf.getAvailableBytes();
 
+        SharedPreferences pref = getActivity().getSharedPreferences("menudata",MODE_PRIVATE);
+        int format_now = pref.getInt("format",1);       //默认RAW
+        if(format_now == 0){
+            saveJPEG = true;
+            saveRAW = false;
+            saveDng = false;
+            runOnUiThread.UpdateText(R.id.text_format,"Save JPEG");
+            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
+        }
+        else if(format_now == 1){
+            saveJPEG = false;
+            saveRAW = true;
+            saveDng = false;
+            runOnUiThread.UpdateText(R.id.text_format,"Save RAW");
+            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
+        }
+        else if(format_now == 2){
+            saveJPEG = true;
+            saveRAW = false;
+            saveDng = true;
+            runOnUiThread.UpdateText(R.id.text_format,"Save JPEG+DNG");
+            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/28860416l));
+        }
+        else if(format_now == 3){
+            saveJPEG = false;
+            saveRAW = false;
+            saveDng = true;
+            runOnUiThread.UpdateText(R.id.text_format,"Save DNG");
+            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));
+        }
 
-        // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we should
-        // configure the preview bounds here (otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener).
+        int size_now = pref.getInt("size",6);          //1920*1080
+        if(size_now == 0){
+            jpegSize = new Size(3968,2976);
+            runOnUiThread.UpdateText(R.id.text_size,"3968*2976");
+        }
+        else if(size_now == 1){
+            jpegSize = new Size(3968,2240);
+            runOnUiThread.UpdateText(R.id.text_size,"3968*2240");
+        }
+        else if(size_now == 2){
+            jpegSize = new Size(2976,2976);
+            runOnUiThread.UpdateText(R.id.text_size,"2976*2976");
+        }
+        else if(size_now == 3){
+            jpegSize = new Size(2048,1536);
+            runOnUiThread.UpdateText(R.id.text_size,"2048*1536");
+        }
+        else if(size_now == 4){
+            jpegSize = new Size(3264,2448);
+            runOnUiThread.UpdateText(R.id.text_size,"3264*2448");
+        }
+        else if(size_now == 5){
+            jpegSize = new Size(3264,1840);
+            runOnUiThread.UpdateText(R.id.text_size,"3264*1840");
+        }
+        else if(size_now == 6){
+            jpegSize = new Size(1920,1080);
+            runOnUiThread.UpdateText(R.id.text_size,"1920*1080");
+        }
+        else if(size_now == 7){
+            jpegSize = new Size(1280,720);
+            runOnUiThread.UpdateText(R.id.text_size,"1280*720");
+        }
+        else if(size_now == 8){
+            jpegSize = new Size(640,480);
+            runOnUiThread.UpdateText(R.id.text_size,"640*480");
+        }
+        else if(size_now == 9){
+            jpegSize = new Size(320,240);
+            runOnUiThread.UpdateText(R.id.text_size,"320*240");
+        }
+        //path_now = pref.getInt("path",0);         //内部存储
+        isExtremeMode = pref.getBoolean("extremeMode",false);
+        if(isExtremeMode){
+            runOnUiThread.UpdateText(R.id.text_mode,"Extreme Mode");
+            runOnUiThread.UpdateText(R.id.interval_text,"极限模式");
+        }
+        else{
+            runOnUiThread.UpdateText(R.id.text_mode,"Timelaps Mode");
+            runOnUiThread.UpdateText(R.id.text_time,"1");
+        }
+        pref = null;
+        Log.i(TAG,"onResume format="+format_now+"  size="+size_now);
+
+        startBackgroundThread();
+        openCamera();
         if (mTextureView.isAvailable()) {
             configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
         } else {
@@ -844,26 +1023,17 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         if (mOrientationListener != null && mOrientationListener.canDetectOrientation()) {
             mOrientationListener.enable();
         }
-
-        /*runOnUiThread.UpdateText(R.id.iso_text,Integer.toString(ISO[iso_now_index]));
-        runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
-        runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
-        mState = STATE_PREVIEW;*/
+        super.onResume();
     }
 
     @Override
     public void onPause() {
-        if (mOrientationListener != null) {
-            mOrientationListener.disable();
-        }
-        closeCamera();
-        stopBackgroundThread();
-
+        shoot = false;
         File file_old = new File("/storage/self/primary/DCIM/FrameCount.dat");
         File file_new = new File("/storage/self/primary/DCIM/FrameCount.dat");
         DataOutputStream out = null;
         try{
-            file_old.delete();
+            file_old.delete();  //删除旧文件
             file_old = null;
             out = new DataOutputStream(new FileOutputStream(file_new));
             out.writeInt(photoCount);
@@ -872,15 +1042,17 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             e.printStackTrace();
         }finally {
             try{
+                file_new = null;
                 if(out != null)
-                    file_new = null;
                     out.close();
             }catch (IOException e){
                 e.printStackTrace();
             }
         }
+        getActivity().finish();
         super.onPause();
     }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -891,6 +1063,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     return;
                 }
             }
+            //onResume();
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
@@ -900,158 +1073,58 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.picture: {
-                final Activity activity = getActivity();
-                if(shoot == true && activity != null){
-                    shoot = false;
-                    //runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
-                    //Intent stopIntent = new Intent(activity,MyService.class);
-                    //myContext.stopService(stopIntent);
-                    //activity.stopService(stopIntent);
-                    Log.d(TAG,"停止服务意图");
-                }
-                else if(shoot == false && activity != null){
-                    shoot = true;
-                    //takePicture();
-                    //Intent startIntent = new Intent(activity,MyService.class);
-                    //myContext.startService(startIntent);
-                    //activity.startService(startIntent);
-                    startTimelaps();
-                    //countDown();
-                    Log.d(TAG,"启动服务意图");
+                if(System.currentTimeMillis() - lastButtonClickTime > 2000l){         //两次点击时间差超过2秒
+                    lastButtonClickTime = System.currentTimeMillis();
+                    final Activity activity = getActivity();
+                    if(shoot == true && activity != null){
+                        shoot = false;
+                        StartAndStopButton.setText("START");
+                        Log.d(TAG,"停止服务意图");
+                    }
+                    else if(shoot == false && activity != null){
+                        shoot = true;
+                        StartAndStopButton.setText("STOP");
+                        startTimelaps();
+                        if(!isExtremeMode)
+                            countDown();
+                        Log.d(TAG,"启动服务意图");
+                    }
                 }
                 break;
             }
             case R.id.info: {
-                Activity activity = getActivity();
-                if (null != activity ) {
-                    if(isLock == false){
-                        /*new AlertDialog.Builder(activity)
-                                .setMessage("LOCK") //R.string.intro_message
-                                .setPositiveButton(android.R.string.ok, null)
-                                .show();*/
-                        isLock = true;
-                        showToast("手动模式");
-                        runOnUiThread.UpdateText(R.id.iso_text,Integer.toString(ISO[iso_now_index]));
-                        runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
-                        runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
-                        //mState = STATE_PREVIEW;
-                        createCameraPreviewSessionLocked();
-                        try{
-                            /*if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AE_MODE_OFF)) {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                                        CaptureRequest.CONTROL_AE_MODE_OFF);
-                            } else {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,  //CaptureRequest.CONTROL_AE_MODE
-                                        CaptureRequest.CONTROL_AE_MODE_OFF);  //CaptureRequest.CONTROL_AE_MODE_OFF
-                            }
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AF_MODE_OFF)) {  //CONTINUOUS_PICTURE
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_OFF);  //CONTINUOUS_PICTURE
-                            } else {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_OFF);   //AUTO
-                            }
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AWB_MODE_OFF)) {
-                                // Allow AWB to run auto-magically if this device supports this
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,  //CONTROL_AWB_MODE
-                                        CaptureRequest.CONTROL_AWB_MODE_OFF);  //CONTROL_AWB_MODE_OFF
-                            }*/
-                            //mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback, mBackgroundHandler);
-                            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, SPEED);    //单位:纳秒ns
-                            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,ISO[iso_now_index]);   //ISO2000
-                            mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
-                            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, wb_now);  //CONTROL_AWB_MODE_OFF
-                            /*if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AE_MODE_OFF)) {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                                        CaptureRequest.CONTROL_AE_MODE_OFF);
-                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,
-                                        SPEED[speed_now_index]);    //单位:纳秒ns
+                if(System.currentTimeMillis() - lastButtonClickTime > 2000l){
+                    lastButtonClickTime = System.currentTimeMillis();
+                    Activity activity = getActivity();
+                    if (null != activity ) {
+                        if(isLock == false){
+                            AutoOrManual.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_a));
+                            isLock = true;
+                            showToast("手动模式");
+                            runOnUiThread.UpdateText(R.id.iso_text,Integer.toString(ISO[iso_now_index]));
+                            runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
+                            runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
+                            createCameraPreviewSessionLocked();
+                            try{
+                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, SPEED);    //单位:纳秒ns
                                 mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,ISO[iso_now_index]);   //ISO2000
-                            } else {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,  //CaptureRequest.CONTROL_AE_MODE
-                                        CaptureRequest.CONTROL_AE_MODE_OFF);  //CaptureRequest.CONTROL_AE_MODE_OFF
-                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,
-                                        SPEED[speed_now_index]);
-                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,ISO[iso_now_index]);
+                                mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
+                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, wb_now);  //CONTROL_AWB_MODE_OFF
+                                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
+                                        mBackgroundHandler);
+                            }catch (Exception e){
+                                e.printStackTrace();
                             }
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AF_MODE_OFF)) {  //CONTINUOUS_PICTURE
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_OFF);  //CONTINUOUS_PICTURE
-                                mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,10.0f);
-                            } else {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_OFF);   //AUTO
-                                mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,10.0f);
-                            }
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AWB_MODE_OFF)) {
-                                // Allow AWB to run auto-magically if this device supports this
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,  //CONTROL_AWB_MODE
-                                        wb_now);  //CONTROL_AWB_MODE_OFF
-                            }*/
-                            mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
-                                    mBackgroundHandler);
-                            /*float availableFocusDis[] = mCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-                            for(int i = 0;i<availableFocusDis.length;i++)
-                                Log.d(TAG,Float.toString(availableFocusDis[i]));*/
-                        }catch (Exception e){
-                            e.printStackTrace();
                         }
-                    }
-                    else{
-                        /*new AlertDialog.Builder(activity)
-                                .setMessage("UNLOCK") //R.string.intro_message
-                                .setPositiveButton(android.R.string.ok, null)
-                                .show();*/
-                        isLock = false;
-                        showToast("自动模式");
-                        runOnUiThread.UpdateText(R.id.iso_text,"");
-                        runOnUiThread.UpdateText(R.id.wb_text,"");
-                        runOnUiThread.UpdateText(R.id.speed_text,"");
-                        //mState = STATE_PREVIEW;
-                        createCameraPreviewSessionLocked();
-                        /*try{
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AE_MODE_ON)) {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                                        CaptureRequest.CONTROL_AE_MODE_ON);
-                            } else {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,  //CaptureRequest.CONTROL_AE_MODE
-                                        CaptureRequest.CONTROL_AE_MODE_ON);  //CaptureRequest.CONTROL_AE_MODE_OFF
-                            }
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)) {  //CONTINUOUS_PICTURE
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);  //CONTINUOUS_PICTURE
-                            } else {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                                        CaptureRequest.CONTROL_AF_MODE_AUTO);   //AUTO
-                            }
-                            if (contains(mCharacteristics.get(
-                                    CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES),
-                                    CaptureRequest.CONTROL_AWB_MODE_AUTO)) {
-                                // Allow AWB to run auto-magically if this device supports this
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,  //CONTROL_AWB_MODE
-                                        CaptureRequest.CONTROL_AWB_MODE_AUTO);  //CONTROL_AWB_MODE_OFF
-                            }
-                            mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
-                                    mBackgroundHandler);
-                        }catch (Exception e){
-                            e.printStackTrace();
-                        }*/
+                        else{
+                            AutoOrManual.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_m));
+                            isLock = false;
+                            showToast("自动模式");
+                            runOnUiThread.UpdateText(R.id.iso_text,"");
+                            runOnUiThread.UpdateText(R.id.wb_text,"");
+                            runOnUiThread.UpdateText(R.id.speed_text,"");
+                            createCameraPreviewSessionLocked();
+                        }
                     }
                 }
                 break;
@@ -1096,7 +1169,22 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     else
                         wb_now++;
                     runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
-                    //Log.d(TAG,WB[wb_now]);
+                    if(wb_now == 1)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_auto_button));
+                    else if(wb_now == 2)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_lamp_button));
+                    else if(wb_now == 3)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_fluorescent_button));
+                    else if(wb_now == 4)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_warm_fluorescent_button));
+                    else if(wb_now == 5)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_sun_button));
+                    else if(wb_now == 6)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_cloud_button));
+                    else if(wb_now == 7)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_sunset_button));
+                    else if(wb_now == 8)
+                        whitebalance_btn.setImageDrawable(getResources().getDrawable(R.drawable.ic_btn_capture_whitebalance_overcoat_button));
                     try{
                         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,wb_now);
                         mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
@@ -1108,27 +1196,31 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 break;
             }
             case R.id.interval_button_plus: {
-                if(shoot == false)
+                if(!shoot && !isExtremeMode)
                     interval++;
                 String s = "间隔" + Integer.toString(interval) + "s";
                 runOnUiThread.UpdateText(R.id.interval_text, s);
-                //runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
+                runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
                 break;
             }
             case R.id.interval_button_sub: {
-                if (interval > 1 && shoot == false)
+                if (interval > 1 && !shoot && !isExtremeMode)
                     interval--;
                 String s = "间隔" + Integer.toString(interval) + "s";
                 runOnUiThread.UpdateText(R.id.interval_text, s);
-                //runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
+                runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
                 break;
             }
-            /*case R.id.menu_btn:{
-                Activity activity = getActivity();
-                Intent intent = new Intent(activity,Manu.class);
-                startActivityForResult(intent,1);
+            case R.id.menu_btn:{
+                if(System.currentTimeMillis() - lastButtonClickTime > 2000l){
+                    lastButtonClickTime = System.currentTimeMillis();
+                    shoot = false;
+                    Activity activity = getActivity();
+                    Intent intent = new Intent(activity,Manu.class);
+                    startActivityForResult(intent,1);
+                }
                 break;
-            }*/
+            }
             default:
                 break;
         }
@@ -1136,7 +1228,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         switch (requestCode){
-            case 1:
+            /*case 1:
                 if(resultCode == RESULT_OK){
                     int index = data.getIntExtra("data_return",1);
                     if(index == 0){
@@ -1152,11 +1244,16 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     else if (index == 2){
                         saveRAW = true;
                         saveJPEG = true;
-                        showToast("saveJPEG+RAW");
+                        showToast("saveJPEG+DNG");
+                    }
+                    else if (index == 3){
+                        saveRAW = true;
+                        saveJPEG = false;
+                        showToast("saveDNG");
                     }
                     setPath(data.getStringExtra("path_name"));
-                    showToast(savePath);
-                }
+                    //showToast(savePath);
+                }*/
             case DocumentsUtils.OPEN_DOCUMENT_TREE_CODE:
                 if (data != null && data.getData() != null){
                     Uri uri = data.getData();
@@ -1167,10 +1264,18 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             default:
                 break;
         }
-        showToast("自动模式");
-        runOnUiThread.UpdateText(R.id.iso_text,"");
-        runOnUiThread.UpdateText(R.id.wb_text,"");
-        runOnUiThread.UpdateText(R.id.speed_text,"");
+        if(!isLock){
+            showToast("自动模式");
+            runOnUiThread.UpdateText(R.id.iso_text,"");
+            runOnUiThread.UpdateText(R.id.wb_text,"");
+            runOnUiThread.UpdateText(R.id.speed_text,"");
+        }
+        else {
+            showToast("手动模式");
+            runOnUiThread.UpdateText(R.id.iso_text,Integer.toString(ISO[iso_now_index]));
+            runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
+            runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
+        }
     }
     class RunOnUiThread extends AppCompatActivity{
         private void UpdateText(final int Id,final String str){
@@ -1191,10 +1296,22 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             intervalText.setText(str);
                             break;
                         case R.id.text_pNum:
-                            photoNum.setText(str);
+                            photoNum.setText("剩余拍摄张数"+str);
                             break;
                         case R.id.text_time:
-                            time_I.setText("每次拍摄最小间隔: "+str+"ms");
+                            if (isExtremeMode)
+                                time_I.setText(str+"fps");
+                            else
+                                time_I.setText(str+"s");
+                            break;
+                        case R.id.text_format:
+                            t_format.setText(str);
+                            break;
+                        case R.id.text_size:
+                            t_size.setText(str);
+                            break;
+                        case R.id.text_mode:
+                            t_mode.setText(str);
                             break;
                         default:
                             break;
@@ -1217,7 +1334,6 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         }
         try {
             // Find a CameraDevice that supports RAW captures, and configure state.
-
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
@@ -1232,42 +1348,34 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 StreamConfigurationMap map = characteristics.get(
                         CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
-                // For still image captures, we use the largest available size.
-                Size largestJpeg = Collections.max(
-                        Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
-                        new CompareSizesByArea());
+                synchronized (mCameraStateLock){
+                    if(saveJPEG){
+                    /*Size largestJpeg = Collections.max(
+                            Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
+                            new CompareSizesByArea());*/
 
-
-                Size largestRaw = Collections.min(
-                        Arrays.asList(map.getOutputSizes(ImageFormat.RAW_SENSOR)),
-                        new CompareSizesByArea());
-                /*Size supportedSizes[] = map.getOutputSizes(ImageFormat.RAW_SENSOR);
-                for(int i = 0;i<supportedSizes.length;i++){
-                    String str = "RAW:"+supportedSizes[i].toString();
-                    Log.d(TAG,str);
-                }*/
-
-                synchronized (mCameraStateLock) {
-                    // Set up ImageReaders for JPEG and RAW outputs.  Place these in a reference
-                    // counted wrapper to ensure they are only closed when all background tasks
-                    // using them are finished.
-
-                    if (mJpegImageReader == null || mJpegImageReader.getAndRetain() == null) {
-                        mJpegImageReader = new RefCountedAutoCloseable<>(
-                                ImageReader.newInstance(largestJpeg.getWidth(),
-                                        largestJpeg.getHeight(), ImageFormat.JPEG, 5));
+                            // Set up ImageReaders for JPEG and RAW outputs.  Place these in a reference
+                            // counted wrapper to ensure they are only closed when all background tasks
+                            // using them are finished.
+                        if (mJpegImageReader == null || mJpegImageReader.getAndRetain() == null) {
+                            mJpegImageReader = new RefCountedAutoCloseable<>(
+                                    ImageReader.newInstance(jpegSize.getWidth(),
+                                            jpegSize.getHeight(), ImageFormat.JPEG, 5));
+                        }
+                        mJpegImageReader.get().setOnImageAvailableListener(mOnJpegImageAvailableListener, mBackgroundHandler);
                     }
-                    //if(saveJPEG)
-                    mJpegImageReader.get().setOnImageAvailableListener(mOnJpegImageAvailableListener, mBackgroundHandler);
+                    if (saveRAW || saveDng){
+                        Size largestRaw = Collections.min(
+                                Arrays.asList(map.getOutputSizes(ImageFormat.RAW_SENSOR)),
+                                new CompareSizesByArea());
 
-                    if (mRawImageReader == null || mRawImageReader.getAndRetain() == null) {
-                        mRawImageReader = new RefCountedAutoCloseable<>(
-                                ImageReader.newInstance(largestRaw.getWidth(),
-                                        largestRaw.getHeight(), ImageFormat.RAW_SENSOR,  5));
+                        if (mRawImageReader == null || mRawImageReader.getAndRetain() == null) {
+                            mRawImageReader = new RefCountedAutoCloseable<>(
+                                    ImageReader.newInstance(largestRaw.getWidth(),
+                                            largestRaw.getHeight(), ImageFormat.RAW_SENSOR,  5));
+                        }
+                        mRawImageReader.get().setOnImageAvailableListener(mOnRawImageAvailableListener, mBackgroundHandler);
                     }
-                    //if(saveRAW)
-                    mRawImageReader.get().setOnImageAvailableListener(mOnRawImageAvailableListener, mBackgroundHandler);
-
                     mCharacteristics = characteristics;
                     mCameraId = cameraId;
                 }
@@ -1456,39 +1564,105 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             mPreviewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
-            mCameraDevice.createCaptureSession(Arrays.asList(surface,
-                            mJpegImageReader.get().getSurface(),
-                            mRawImageReader.get().getSurface()), new CameraCaptureSession.StateCallback() {
-                        @Override
-                        public void onConfigured(CameraCaptureSession cameraCaptureSession) {
-                            synchronized (mCameraStateLock) {
-                                // The camera is already closed
-                                if (null == mCameraDevice) {
-                                    return;
+            if(saveJPEG && saveDng){
+                mCameraDevice.createCaptureSession(Arrays.asList(surface,mRawImageReader.get().getSurface(),
+                        mJpegImageReader.get().getSurface()), new CameraCaptureSession.StateCallback() {
+                            @Override
+                            public void onConfigured(CameraCaptureSession cameraCaptureSession) {
+                                synchronized (mCameraStateLock) {
+                                    // The camera is already closed
+                                    if (null == mCameraDevice) {
+                                        return;
+                                    }
+                                    try {
+                                        setup3AControlsLocked(mPreviewRequestBuilder);
+                                        // Finally, we start displaying the camera preview.
+                                        cameraCaptureSession.setRepeatingRequest(
+                                                mPreviewRequestBuilder.build(),
+                                                mPreCaptureCallback, mBackgroundHandler);
+                                        mState = STATE_PREVIEW;
+                                    } catch (CameraAccessException | IllegalStateException e) {
+                                        e.printStackTrace();
+                                        return;
+                                    }
+                                    // When the session is ready, we start displaying the preview.
+                                    mCaptureSession = cameraCaptureSession;
                                 }
-
-                                try {
-                                    setup3AControlsLocked(mPreviewRequestBuilder);
-                                    // Finally, we start displaying the camera preview.
-                                    cameraCaptureSession.setRepeatingRequest(
-                                            mPreviewRequestBuilder.build(),
-                                            mPreCaptureCallback, mBackgroundHandler);
-                                    mState = STATE_PREVIEW;
-                                } catch (CameraAccessException | IllegalStateException e) {
-                                    e.printStackTrace();
-                                    return;
-                                }
-                                // When the session is ready, we start displaying the preview.
-                                mCaptureSession = cameraCaptureSession;
                             }
-                        }
 
-                        @Override
-                        public void onConfigureFailed(CameraCaptureSession cameraCaptureSession) {
-                            showToast("Failed to configure camera.");
-                        }
-                    }, mBackgroundHandler
-            );
+                            @Override
+                            public void onConfigureFailed(CameraCaptureSession cameraCaptureSession) {
+                                showToast("Failed to configure camera.");
+                            }
+                        }, mBackgroundHandler
+                );
+            }
+            else if (saveRAW || saveDng){
+                mCameraDevice.createCaptureSession(Arrays.asList(surface,
+                        mRawImageReader.get().getSurface()), new CameraCaptureSession.StateCallback() {
+                            @Override
+                            public void onConfigured(CameraCaptureSession cameraCaptureSession) {
+                                synchronized (mCameraStateLock) {
+                                    // The camera is already closed
+                                    if (null == mCameraDevice) {
+                                        return;
+                                    }
+                                    try {
+                                        setup3AControlsLocked(mPreviewRequestBuilder);
+                                        // Finally, we start displaying the camera preview.
+                                        cameraCaptureSession.setRepeatingRequest(
+                                                mPreviewRequestBuilder.build(),
+                                                mPreCaptureCallback, mBackgroundHandler);
+                                        mState = STATE_PREVIEW;
+                                    } catch (CameraAccessException | IllegalStateException e) {
+                                        e.printStackTrace();
+                                        return;
+                                    }
+                                    // When the session is ready, we start displaying the preview.
+                                    mCaptureSession = cameraCaptureSession;
+                                }
+                            }
+
+                            @Override
+                            public void onConfigureFailed(CameraCaptureSession cameraCaptureSession) {
+                                showToast("Failed to configure camera.");
+                            }
+                        }, mBackgroundHandler
+                );
+            }
+            else if (saveJPEG){
+                mCameraDevice.createCaptureSession(Arrays.asList(surface,
+                        mJpegImageReader.get().getSurface()), new CameraCaptureSession.StateCallback() {
+                            @Override
+                            public void onConfigured(CameraCaptureSession cameraCaptureSession) {
+                                synchronized (mCameraStateLock) {
+                                    // The camera is already closed
+                                    if (null == mCameraDevice) {
+                                        return;
+                                    }
+                                    try {
+                                        setup3AControlsLocked(mPreviewRequestBuilder);
+                                        // Finally, we start displaying the camera preview.
+                                        cameraCaptureSession.setRepeatingRequest(
+                                                mPreviewRequestBuilder.build(),
+                                                mPreCaptureCallback, mBackgroundHandler);
+                                        mState = STATE_PREVIEW;
+                                    } catch (CameraAccessException | IllegalStateException e) {
+                                        e.printStackTrace();
+                                        return;
+                                    }
+                                    // When the session is ready, we start displaying the preview.
+                                    mCaptureSession = cameraCaptureSession;
+                                }
+                            }
+
+                            @Override
+                            public void onConfigureFailed(CameraCaptureSession cameraCaptureSession) {
+                                showToast("Failed to configure camera.");
+                            }
+                        }, mBackgroundHandler
+                );
+            }
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -1503,14 +1677,6 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
      * @param builder the builder to configure.
      */
     private void setup3AControlsLocked(CaptureRequest.Builder builder) {
-        // Enable auto-magical 3A run by camera device
-        /*if(isLock){
-            builder.set(CaptureRequest.CONTROL_MODE,
-                    CaptureRequest.CONTROL_MODE_AUTO); //AUTO
-        }else{
-            builder.set(CaptureRequest.CONTROL_MODE,
-                    CaptureRequest.CONTROL_MODE_AUTO); //AUTO
-        }*/
 
         Float minFocusDist =
                 mCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);  //LENS_INFO_MINIMUM_FOCUS_DISTANCE
@@ -1754,13 +1920,18 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         isTakePhoto = true;
         if(photoCount != 99999){
             dataNow = new Date();
-            time_of_onec_shoot = BigInteger.valueOf(dataNow.getTime());
-            time_remove = time_of_onec_shoot;
-            Log.i(TAG,"每次拍摄的时间差 = "+(time_of_onec_shoot.subtract(time_tmp)).toString()+"ms");
-            runOnUiThread.UpdateText(R.id.text_time,(time_of_onec_shoot.subtract(time_tmp)).toString());
-            time_tmp = time_of_onec_shoot;
+            time_of_once_shoot = BigInteger.valueOf(dataNow.getTime());
+            time_remove = time_of_once_shoot;
+            int t = (time_of_once_shoot.subtract(time_tmp)).intValue();       //毫秒值
+            BigDecimal bg = new BigDecimal(1000.0/t);
+            Log.i(TAG,"每次拍摄的时间差 = "+Integer.toString(t)+"ms");
+            if (isExtremeMode)
+                runOnUiThread.UpdateText(R.id.text_time, Double.toString(bg.setScale(2,BigDecimal.ROUND_HALF_UP).doubleValue()));
+            time_tmp = time_of_once_shoot;
             photoCount = photoCount + 1;
         }
+        else
+            photoCount = 0;
         //clearMemory(MyApplication.getContext());
         synchronized (mCameraStateLock) {
             mPendingUserCaptures++;
@@ -1816,34 +1987,34 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             final CaptureRequest.Builder captureBuilder =
                     mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
 
-            captureBuilder.addTarget(mJpegImageReader.get().getSurface());
-            captureBuilder.addTarget(mRawImageReader.get().getSurface());
-
-            // Use the same AE and AF modes as the preview.
-            setup3AControlsLocked(captureBuilder);
-
-            // Set orientation.
-            int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
-            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,
-                    sensorToDeviceRotation(mCharacteristics, rotation));
-
-            // 设置请求标记以轻松跟踪回调中的结果。
-            captureBuilder.setTag(mRequestCounter.getAndIncrement());
-
+            if(saveJPEG){
+                captureBuilder.addTarget(mJpegImageReader.get().getSurface());
+                // Set orientation.
+                int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
+                captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,
+                        sensorToDeviceRotation(mCharacteristics, rotation));
+                // Create an ImageSaverBuilder in which to collect results, and add it to the queue
+                // of active requests.
+            }
+            if(saveRAW || saveDng){
+                captureBuilder.addTarget(mRawImageReader.get().getSurface());
+                // Create an ImageSaverBuilder in which to collect results, and add it to the queue
+                // of active requests.
+            }
+            setup3AControlsLocked(captureBuilder);         // Use the same AE and AF modes as the preview.
+            captureBuilder.setTag(mRequestCounter.getAndIncrement());      // 设置请求标记以轻松跟踪回调中的结果。
             CaptureRequest request = captureBuilder.build();
-
-            // Create an ImageSaverBuilder in which to collect results, and add it to the queue
-            // of active requests.
-            ImageSaver.ImageSaverBuilder jpegBuilder = new ImageSaver.ImageSaverBuilder(activity)
-                    .setCharacteristics(mCharacteristics);
-            ImageSaver.ImageSaverBuilder rawBuilder = new ImageSaver.ImageSaverBuilder(activity)
-                    .setCharacteristics(mCharacteristics);
-
-            mJpegResultQueue.put((int) request.getTag(), jpegBuilder);
-            mRawResultQueue.put((int) request.getTag(), rawBuilder);
-
+            if(saveJPEG){
+                ImageSaver.ImageSaverBuilder jpegBuilder = new ImageSaver.ImageSaverBuilder(activity)
+                        .setCharacteristics(mCharacteristics);
+                mJpegResultQueue.put((int) request.getTag(), jpegBuilder);
+            }
+            if(saveRAW || saveDng){
+                ImageSaver.ImageSaverBuilder rawBuilder = new ImageSaver.ImageSaverBuilder(activity)
+                        .setCharacteristics(mCharacteristics);
+                mRawResultQueue.put((int) request.getTag(), rawBuilder);
+            }
             mCaptureSession.capture(request, mCaptureCallback, mBackgroundHandler);
-
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -1905,6 +2076,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             } catch (IllegalStateException e) {         //排队等待保存的图像过多，需要删除图像
                 Log.e(TAG, "Too many images queued for saving, dropping image for request: " +
                         entry.getKey());
+                showToast("拍摄间隔太短 Shot interval is too short!");
                 pendingQueue.remove(entry.getKey());
                 return;
             }
@@ -2049,46 +2221,12 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     break;
                 }*/
                 case ImageFormat.RAW_SENSOR: {
-                    ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
-                    byte[] bytes = new byte[buffer.remaining()];
-                    byte[] bytes_low = new byte[bytes.length/4];
-                    buffer.get(bytes);
-                    for(int x = 0,i = 0;i < bytes_low.length;x += 8,i += 4){      //宽高的像素都减少一半，变成1984*1488
-                        if(x != 0 && x % 15872 == 0 && (x / 15872) % 2 == 1) {
-                            if (x + 15872 < 23617536)
-                                x += 15872;
-                            else
-                                break;
-                        }
-                        bytes_low[i] = bytes[x];
-                        bytes_low[i+1] = bytes[x+1];
-                        bytes_low[i+2] = bytes[x+2];
-                        bytes_low[i+3] = bytes[x+3];
-                    }
-                    buffer.clear();
-                    buffer = null;
-                    bytes = null;
-                    byte[] bytes_1920_1080 = new byte[1920*1080*2];
-                    int i = 0;
-                    for(int y = 204;y < 1284;y++){         //用于像素减少，从1984*1488像素减少到1920*1080像素，减少存储压力
-                        for(int x = 32;x < 1952;x++){
-                            if(i < bytes_1920_1080.length){
-                                bytes_1920_1080[i] = bytes_low[2 * (1984 * y + x)];         //一个像素两字节赋值
-                                bytes_1920_1080[i+1] = bytes_low[2 * (1984 * y + x) + 1];
-                                i += 2;
-                            }
-                        }
-                    }
-                    bytes_low = null;
-                    Date dataNow = new Date();
-                    BigInteger t0 = BigInteger.valueOf(dataNow.getTime());
-                    BigInteger t1 = t0;
-                    //Log.d(TAG,t.toString());
-                    //DngCreator dngCreator = new DngCreator(mCharacteristics, mCaptureResult);
-
-                    /*  以下输出相机和捕获图像的一些信息和元数据         */
-                    //Size s = new Size(3968,2976);
-                    //SizeF sf = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                    //isSaveDngFile = null;
+                    if(saveDng){                         //保存DNG文件
+                        DngCreator dngCreator = new DngCreator(mCharacteristics, mCaptureResult);
+                        /*  以下输出相机和捕获图像的一些信息和元数据         */
+                        //Size s = new Size(3968,2976);
+                        //SizeF sf = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
                     /*BlackLevelPattern blackLevelPattern = mCharacteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN);
                     ColorSpaceTransform calibrationTransform1 = mCharacteristics.get(CameraCharacteristics.SENSOR_CALIBRATION_TRANSFORM1);
                     ColorSpaceTransform calibrationTransform2 = mCharacteristics.get(CameraCharacteristics.SENSOR_CALIBRATION_TRANSFORM1);
@@ -2142,54 +2280,115 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             +"toneMapGamma = "+toneMapGamma.toString()+"\n"
                             +"toneMode = "+toneMode.toString()+"\n"
                             +"tonePresetCurve = "+tonePresetCurve.toString()+"\n");*/
-                    //Size s = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
-                    //Rect r = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE);
-                    //Log.d(TAG,"Size="+s.toString()+"  SizeF="+sf.toString()+"  Rect="+r.toString());
-
-                    /* 以下保存raw文件  */
-                    if(savePath.equals("/storage/emulated/0/DCIM")){
-                        FileOutputStream output = null;
-                        try {
-                            output = new FileOutputStream(mFile);
-                            output.write(bytes_1920_1080);
-                            //dngCreator.writeImage(output, mImage);
-                            //dngCreator.writeByteBuffer(output,s,buffer,0);
-                            success = true;
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        } finally {
-                            mImage.close();
-                            closeOutput(output);
-                            //buffer.clear();
-                            bytes_1920_1080 = null;
-                            dataNow = new Date();
-                            t1 = BigInteger.valueOf(dataNow.getTime());
-                            Log.d(TAG,"Save Time = "+(t1.subtract(t0).toString())+"ms");
-                            t0 = null;
-                            t1 = null;
-                            dataNow = null;
+                        //Size s = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+                        //Rect r = mCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE);
+                        //Log.d(TAG,"Size="+s.toString()+"  SizeF="+sf.toString()+"  Rect="+r.toString());
+                        if(savePath.equals("/storage/emulated/0/DCIM")){
+                            FileOutputStream output = null;
+                            try {
+                                output = new FileOutputStream(mFile);
+                                dngCreator.writeImage(output, mImage);
+                                success = true;
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            } finally {
+                                mImage.close();
+                                closeOutput(output);
+                                dngCreator.close();
+                            }
+                        }else {
+                            OutputStream outputStream = null;
+                            try {
+                                outputStream = DocumentsUtils.getOutputStream(MyApplication.getContext(),mFile);
+                                dngCreator.writeImage(outputStream, mImage);
+                                success = true;
+                            }catch (IOException e){
+                                e.printStackTrace();
+                            }finally {
+                                mImage.close();
+                                closeOutput(outputStream);
+                                dngCreator.close();
+                            }
                         }
-                    }else {
-                        OutputStream outputStream = null;
-                        try {
-                            outputStream = DocumentsUtils.getOutputStream(MyApplication.getContext(),mFile);
-                            outputStream.write(bytes_1920_1080);
-                            //dngCreator.writeImage(outputStream, mImage);
-                            //dngCreator.writeByteBuffer(outputStream,s,buffer,0);
-                            success = true;
-                        }catch (IOException e){
-                            e.printStackTrace();
-                        }finally {
-                            mImage.close();
-                            closeOutput(outputStream);
-                            //buffer.clear();
-                            bytes_1920_1080 = null;
-                            dataNow = new Date();
-                            t1 = BigInteger.valueOf(dataNow.getTime());
-                            Log.d(TAG,"Save Time = "+(t1.subtract(t0).toString())+"ms");
-                            t0 = null;
-                            t1 = null;
-                            dataNow = null;
+                    }
+                    else{              //保存RAW文件
+                        ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+                        byte[] bytes = new byte[buffer.remaining()];
+                        byte[] bytes_low = new byte[bytes.length/4];
+                        buffer.get(bytes);
+                        for(int x = 0,i = 0;i < bytes_low.length;x += 8,i += 4){      //宽高的像素都减少一半，变成1984*1488
+                            if(x != 0 && x % 15872 == 0 && (x / 15872) % 2 == 1) {
+                                if (x + 15872 < 23617536)
+                                    x += 15872;
+                                else
+                                    break;
+                            }
+                            bytes_low[i] = bytes[x];
+                            bytes_low[i+1] = bytes[x+1];
+                            bytes_low[i+2] = bytes[x+2];
+                            bytes_low[i+3] = bytes[x+3];
+                        }
+                        buffer.clear();
+                        buffer = null;
+                        bytes = null;
+                        byte[] bytes_1920_1080 = new byte[1920*1080*2];
+                        int i = 0;
+                        for(int y = 204;y < 1284;y++){         //用于像素减少，从1984*1488像素减少到1920*1080像素，减少存储压力
+                            for(int x = 32;x < 1952;x++){
+                                if(i < bytes_1920_1080.length){
+                                    bytes_1920_1080[i] = bytes_low[2 * (1984 * y + x)];         //一个像素两字节赋值
+                                    bytes_1920_1080[i+1] = bytes_low[2 * (1984 * y + x) + 1];
+                                    i += 2;
+                                }
+                            }
+                        }
+                        bytes_low = null;
+                        Date dataNow = new Date();
+                        BigInteger t0 = BigInteger.valueOf(dataNow.getTime());
+                        BigInteger t1 = t0;
+                        //Log.d(TAG,t.toString());
+
+                        /* 以下保存raw文件  */
+                        if(savePath.equals("/storage/emulated/0/DCIM")){
+                            FileOutputStream output = null;
+                            try {
+                                output = new FileOutputStream(mFile);
+                                output.write(bytes_1920_1080);
+                                success = true;
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            } finally {
+                                mImage.close();
+                                closeOutput(output);
+                                //buffer.clear();
+                                bytes_1920_1080 = null;
+                                dataNow = new Date();
+                                t1 = BigInteger.valueOf(dataNow.getTime());
+                                Log.d(TAG,"Save Time = "+(t1.subtract(t0).toString())+"ms");
+                                t0 = null;
+                                t1 = null;
+                                dataNow = null;
+                            }
+                        }else {
+                            OutputStream outputStream = null;
+                            try {
+                                outputStream = DocumentsUtils.getOutputStream(MyApplication.getContext(),mFile);
+                                outputStream.write(bytes_1920_1080);
+                                success = true;
+                            }catch (IOException e){
+                                e.printStackTrace();
+                            }finally {
+                                mImage.close();
+                                closeOutput(outputStream);
+                                //buffer.clear();
+                                bytes_1920_1080 = null;
+                                dataNow = new Date();
+                                t1 = BigInteger.valueOf(dataNow.getTime());
+                                Log.d(TAG,"Save Time = "+(t1.subtract(t0).toString())+"ms");
+                                t0 = null;
+                                t1 = null;
+                                dataNow = null;
+                            }
                         }
                     }
                     break;
@@ -2199,7 +2398,6 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     break;
                 }
             }
-
             // 减少引用计数以允许关闭ImageReader以释放资源
             mReader.close();
 
@@ -2584,7 +2782,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             queue.remove(requestId);
             //Log.i(TAG,"从队列上移除当前请求");
             AsyncTask.THREAD_POOL_EXECUTOR.execute(saver);        //移除ImageSaver
-            //mState = STATE_PREVIEW;
+            isSaveFinished = true;
             dataNow = new Date();
             Log.i(TAG,"从触发takePic到移除ImageSaver所用时间 = "
                     +(BigInteger.valueOf(dataNow.getTime()).subtract(time_remove)).toString()+"ms");

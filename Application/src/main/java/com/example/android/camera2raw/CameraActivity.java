@@ -54,4 +54,10 @@ public class CameraActivity extends Activity {
         super.onDestroy();
         unregisterReceiver(mediaReceiver);
     }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        finish();
+    }
 }
