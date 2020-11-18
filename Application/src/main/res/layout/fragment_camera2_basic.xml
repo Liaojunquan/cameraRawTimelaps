@@ -32,7 +32,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="#ff0000"
-            android:textSize="20dp"
+            android:textSize="17dp"
             android:text="剩余张数: 无限"/>
         <TextView
             android:id="@+id/text_time"
@@ -40,7 +40,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="#ff0000"
-            android:textSize="20dp"
+            android:textSize="17dp"
             android:text="0fps"/>
 
     </LinearLayout>
@@ -57,7 +57,7 @@
             android:layout_weight="1"
             android:text="1920*1080"
             android:textColor="#ff0000"
-            android:textSize="20dp" />
+            android:textSize="17dp" />
 
         <TextView
             android:id="@+id/text_format"
@@ -66,7 +66,7 @@
             android:layout_weight="1"
             android:text="Save RAW"
             android:textColor="#ff0000"
-            android:textSize="20dp" />
+            android:textSize="17dp" />
     </LinearLayout>
 
     <LinearLayout
@@ -76,11 +76,20 @@
 
         <TextView
             android:id="@+id/text_mode"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="Timelaps Mode"
             android:textColor="#ff0000"
-            android:textSize="20dp"/>
+            android:textSize="16dp"/>
+        <TextView
+            android:id="@+id/text_depth"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="16bit"
+            android:textColor="#ff0000"
+            android:textSize="16dp"/>
     </LinearLayout>
 
     <FrameLayout

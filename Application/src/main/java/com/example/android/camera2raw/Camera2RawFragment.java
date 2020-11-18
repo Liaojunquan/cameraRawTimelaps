@@ -157,8 +157,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     private TextView intervalText;
     private TextView photoNum;
     private TextView time_I;
-    private static final int ISO[] = {50,100,200,400,800,1600,3200,6400};
-    private static final String WB[] = {"","自动","白炽灯","荧光灯","暖荧光","日光","多云","黄昏","阴天"};
+    private static final int[] ISO = {50,100,200,400,800,1600,3200,6400};
+    private static final String[] WB = {"","自动","白炽灯","荧光灯","暖荧光","日光","多云","黄昏","阴天"};
     private int iso_now_index = 0;
     private int wb_now = 1;
     private int posX,posY,lastX,lastY;
@@ -180,7 +180,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     private BigInteger time_remove = time_of_once_shoot;
     private boolean isSaveFinished = false;
     private StatFs sf;
-    private long availableBytesSize = 0l;
+    private long availableBytesSize = 0L;
+    //private long tmpleByteSize = 0l;
     private Button StartAndStopButton;
     private ImageButton AutoOrManual;
     //private File isSaveDngFile;
@@ -192,7 +193,18 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     private ImageButton whitebalance_btn;
     private boolean isExtremeMode = false;
     private TextView t_mode;
-    private long lastButtonClickTime = 0l;
+    private long lastButtonClickTime = 0L;
+    //private final TreeMap<Integer, ImageSaver.ImageSaverBuilder> tmpRawQueue = new TreeMap<>();
+    private static Size maxRawSize;
+    private static int[] rawSizeRange;
+    private static int rawSizeIndex = 0;
+    private static int realPixelDepth = 0;
+    private String[] JPEGSize;
+    private int format_now = 1;
+    private int size_now = 0;
+    private static int saveBitDepth = 16;
+    private TextView t_bitDepth;
+    private int photoBitSizeNow = 0;
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 0);
@@ -244,7 +256,13 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             @Override
             public void run() {
                 takePicture();
+                //dataNow = new Date();
+                //Log.e(TAG,"开始时间"+Long.toString(dataNow.getTime()));
+                //int i = photoCount;
                 while (shoot){
+                    /*sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                    availableBytesSize = sf.getAvailableBytes();*/
+                    //Log.e(TAG,"Byte Sub "+Long.toString(tmpleByteSize - availableBytesSize));
                     if(isExtremeMode){               //极限模式Extreme mode
                         if(saveDng){
                             File f = new File(savePath + "/DNG_" + getFrameNumString() + ".dng");
@@ -264,49 +282,53 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                                     takePicture();
                                     Log.d(TAG,"触发");
                                 }
-                                sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
-                                availableBytesSize = sf.getAvailableBytes();
-                                if(saveJPEG)      //JPEG+DNG
+                                /*sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                                availableBytesSize = sf.getAvailableBytes();*/
+                                /*if(saveJPEG)      //JPEG+DNG
                                     runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/28860416l));
                                 else       //DNG
-                                    runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));
+                                    runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));*/
                             }
                         }
                         else if(isSaveFinished){
-                            sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
-                            availableBytesSize = sf.getAvailableBytes();
-                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));    //JPEG or RAW
+                            //tmpleByteSize = availableBytesSize;
+                            /*sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                            availableBytesSize = sf.getAvailableBytes();*/
+                            //runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));    //JPEG or RAW
                             isSaveFinished = false;
                             Log.d(TAG,"触发");
                             takePicture();
                         }
                         try{
                             //Thread.sleep(interval*1000);
-                            Thread.sleep(100);         //尝试10fps
+                            Thread.sleep(10);
                         }catch (InterruptedException e){
                             e.printStackTrace();
                         }
                     }
                     else {                         //延时摄影模式Timelaps mode
-                        sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
-                        availableBytesSize = sf.getAvailableBytes();
-                        if(saveJPEG && !saveRAW && !saveDng)
+                        /*sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                        availableBytesSize = sf.getAvailableBytes();*/
+                        /*if(saveJPEG && !saveRAW && !saveDng)
                             runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
                         else if(!saveJPEG && saveRAW && !saveDng)
                             runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
                         else if(saveJPEG && !saveRAW && saveDng)
                             runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/28860416l));
                         else if(!saveJPEG && !saveRAW && saveDng)
-                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));
+                            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));*/
                         try{
                             Thread.sleep(interval*1000);
                             //Thread.sleep(100);         //尝试10fps
                         }catch (InterruptedException e){
                             e.printStackTrace();
                         }
-                        takePicture();
+                        if(shoot)
+                            takePicture();
                     }
                 }
+                //dataNow = new Date();
+                //Log.e(TAG,"结束时间"+Long.toString(dataNow.getTime()));
                 Thread.interrupted();
             }
         }).start();
@@ -643,6 +665,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
      */
     private final CameraCaptureSession.CaptureCallback mCaptureCallback
             = new CameraCaptureSession.CaptureCallback() {
+        
         @Override
         public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request,
                                      long timestamp, long frameNumber) {
@@ -664,7 +687,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 if(saveDng)
                     rawFile = new File(savePath + "/DNG_" + currentFrame + ".dng");
                 else
-                    rawFile = new File(savePath + "/RAW_" + currentFrame + ".raw");
+                    rawFile = new File(savePath + "/RAW_" + currentFrame + ".raw" + Integer.toString(saveBitDepth));
                 // Look up the ImageSaverBuilder for this request and update it with the file name
                 // based on the capture start time.
                 ImageSaver.ImageSaverBuilder rawBuilder;
@@ -678,8 +701,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         @Override
         public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                        TotalCaptureResult result) {
-
-            //StringBuilder sb = new StringBuilder();
+            //isSaveFinished = true;
             int requestId = (int) request.getTag();
             if(saveJPEG){
                 ImageSaver.ImageSaverBuilder jpegBuilder;
@@ -710,6 +732,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     }
                     // If we have all the results necessary, save the image to a file in the background.
                     handleCompletionLocked(requestId, rawBuilder, mRawResultQueue);
+                    //Log.e(TAG,"handleCompletionLocked in onCaptureCompleted");          //second
                 }
             }
             finishedCaptureLocked();
@@ -786,6 +809,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         t_size = (TextView)view.findViewById(R.id.text_size);
         whitebalance_btn = (ImageButton)view.findViewById(R.id.wb_button) ;
         t_mode = (TextView)view.findViewById(R.id.text_mode);
+        t_bitDepth = (TextView)view.findViewById(R.id.text_depth);
 
         view.findViewById(R.id.texture).setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -835,8 +859,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             try {
                                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
                                         mBackgroundHandler);
-                                mCaptureSession.capture(mPreviewRequestBuilder.build(), mPreCaptureCallback,
-                                        mBackgroundHandler);
+                                //mCaptureSession.capture(mPreviewRequestBuilder.build(), mPreCaptureCallback, mBackgroundHandler);
                                 //Log.d(TAG,Float.toString(nowFocusDistant));
                             }catch (CameraAccessException e){
                                 e.printStackTrace();
@@ -925,81 +948,48 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             }
         }
         file = null;
-        sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
-        availableBytesSize = sf.getAvailableBytes();
 
         SharedPreferences pref = getActivity().getSharedPreferences("menudata",MODE_PRIVATE);
-        int format_now = pref.getInt("format",1);       //默认RAW
+        interval = pref.getInt("IntervalTime",1);
+        format_now = pref.getInt("format",1);       //默认RAW
+        saveBitDepth = pref.getInt("RawBitDepth",16);  //位深
         if(format_now == 0){
             saveJPEG = true;
             saveRAW = false;
             saveDng = false;
             runOnUiThread.UpdateText(R.id.text_format,"Save JPEG");
-            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
+            runOnUiThread.UpdateText(R.id.text_depth,"8bit");
         }
         else if(format_now == 1){
             saveJPEG = false;
             saveRAW = true;
             saveDng = false;
             runOnUiThread.UpdateText(R.id.text_format,"Save RAW");
-            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/4147200l));
+            if(saveBitDepth == 16)
+                runOnUiThread.UpdateText(R.id.text_depth,"16bit");
+            else if(saveBitDepth == 12)
+                runOnUiThread.UpdateText(R.id.text_depth,"12bit");
+            else if(saveBitDepth == 10)
+                runOnUiThread.UpdateText(R.id.text_depth,"10bit");
+            else if(saveBitDepth == 8)
+                runOnUiThread.UpdateText(R.id.text_depth,"8bit");
         }
         else if(format_now == 2){
             saveJPEG = true;
             saveRAW = false;
             saveDng = true;
             runOnUiThread.UpdateText(R.id.text_format,"Save JPEG+DNG");
-            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/28860416l));
+            runOnUiThread.UpdateText(R.id.text_depth,"8bit + 16bit");
         }
         else if(format_now == 3){
             saveJPEG = false;
             saveRAW = false;
             saveDng = true;
             runOnUiThread.UpdateText(R.id.text_format,"Save DNG");
-            runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/23617536l));
+            runOnUiThread.UpdateText(R.id.text_depth,"16bit");
         }
 
-        int size_now = pref.getInt("size",6);          //1920*1080
-        if(size_now == 0){
-            jpegSize = new Size(3968,2976);
-            runOnUiThread.UpdateText(R.id.text_size,"3968*2976");
-        }
-        else if(size_now == 1){
-            jpegSize = new Size(3968,2240);
-            runOnUiThread.UpdateText(R.id.text_size,"3968*2240");
-        }
-        else if(size_now == 2){
-            jpegSize = new Size(2976,2976);
-            runOnUiThread.UpdateText(R.id.text_size,"2976*2976");
-        }
-        else if(size_now == 3){
-            jpegSize = new Size(2048,1536);
-            runOnUiThread.UpdateText(R.id.text_size,"2048*1536");
-        }
-        else if(size_now == 4){
-            jpegSize = new Size(3264,2448);
-            runOnUiThread.UpdateText(R.id.text_size,"3264*2448");
-        }
-        else if(size_now == 5){
-            jpegSize = new Size(3264,1840);
-            runOnUiThread.UpdateText(R.id.text_size,"3264*1840");
-        }
-        else if(size_now == 6){
-            jpegSize = new Size(1920,1080);
-            runOnUiThread.UpdateText(R.id.text_size,"1920*1080");
-        }
-        else if(size_now == 7){
-            jpegSize = new Size(1280,720);
-            runOnUiThread.UpdateText(R.id.text_size,"1280*720");
-        }
-        else if(size_now == 8){
-            jpegSize = new Size(640,480);
-            runOnUiThread.UpdateText(R.id.text_size,"640*480");
-        }
-        else if(size_now == 9){
-            jpegSize = new Size(320,240);
-            runOnUiThread.UpdateText(R.id.text_size,"320*240");
-        }
+        size_now = pref.getInt("size",0);
         //path_now = pref.getInt("path",0);         //内部存储
         isExtremeMode = pref.getBoolean("extremeMode",false);
         if(isExtremeMode){
@@ -1008,8 +998,13 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         }
         else{
             runOnUiThread.UpdateText(R.id.text_mode,"Timelaps Mode");
-            runOnUiThread.UpdateText(R.id.text_time,"1");
+            runOnUiThread.UpdateText(R.id.text_time,Integer.toString(interval));
+            runOnUiThread.UpdateText(R.id.interval_text,"间隔"+Integer.toString(interval)+"s");
         }
+        rawSizeIndex = pref.getInt("rawSizeArrayIndex",0);
+        if(realPixelDepth == 0 && pref.getInt("realDepth",0) != 0)
+            realPixelDepth = pref.getInt("realDepth",0);
+
         pref = null;
         Log.i(TAG,"onResume format="+format_now+"  size="+size_now);
 
@@ -1073,15 +1068,16 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.picture: {
-                if(System.currentTimeMillis() - lastButtonClickTime > 2000l){         //两次点击时间差超过2秒
+                if(System.currentTimeMillis() - lastButtonClickTime > 2000L){         //两次点击时间差超过2秒
                     lastButtonClickTime = System.currentTimeMillis();
                     final Activity activity = getActivity();
-                    if(shoot == true && activity != null){
+                    if(shoot && activity != null){
                         shoot = false;
                         StartAndStopButton.setText("START");
+                        runOnUiThread.UpdateText(R.id.text_time,Integer.toString(interval));
                         Log.d(TAG,"停止服务意图");
                     }
-                    else if(shoot == false && activity != null){
+                    else if(!shoot && activity != null){
                         shoot = true;
                         StartAndStopButton.setText("STOP");
                         startTimelaps();
@@ -1093,11 +1089,11 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 break;
             }
             case R.id.info: {
-                if(System.currentTimeMillis() - lastButtonClickTime > 2000l){
+                if(System.currentTimeMillis() - lastButtonClickTime > 2000L){
                     lastButtonClickTime = System.currentTimeMillis();
                     Activity activity = getActivity();
                     if (null != activity ) {
-                        if(isLock == false){
+                        if(!isLock){
                             AutoOrManual.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_a));
                             isLock = true;
                             showToast("手动模式");
@@ -1212,12 +1208,18 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 break;
             }
             case R.id.menu_btn:{
-                if(System.currentTimeMillis() - lastButtonClickTime > 2000l){
+                if(System.currentTimeMillis() - lastButtonClickTime > 2000L){
                     lastButtonClickTime = System.currentTimeMillis();
                     shoot = false;
                     Activity activity = getActivity();
                     Intent intent = new Intent(activity,Manu.class);
-                    startActivityForResult(intent,1);
+                    if(rawSizeRange != null && JPEGSize != null){
+                        intent.putExtra("rawSizeArray",rawSizeRange);
+                        intent.putExtra("realPixelDepth",realPixelDepth);
+                        intent.putExtra("availableJPEGSize",JPEGSize);
+                        intent.putExtra("Interval",interval);
+                        startActivityForResult(intent,1);
+                    }
                 }
                 break;
             }
@@ -1313,6 +1315,9 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                         case R.id.text_mode:
                             t_mode.setText(str);
                             break;
+                        case R.id.text_depth:
+                            t_bitDepth.setText(str);
+                            break;
                         default:
                             break;
                     }
@@ -1347,8 +1352,46 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
 
                 StreamConfigurationMap map = characteristics.get(
                         CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                Size largestRaw = Collections.min(
+                        Arrays.asList(map.getOutputSizes(ImageFormat.RAW_SENSOR)),
+                        new CompareSizesByArea());
+                Size[] availableSize = map.getOutputSizes(ImageFormat.JPEG);
 
                 synchronized (mCameraStateLock){
+                    jpegSize = availableSize[size_now];
+                    JPEGSize = new String[availableSize.length];
+                    for(int i = 0; i < JPEGSize.length; i++){
+                        JPEGSize[i] = Integer.toString(availableSize[i].getWidth()) + "*" + Integer.toString(availableSize[i].getHeight());
+                        //Log.e(TAG,JPEGSize[i]);
+                    }
+                    maxRawSize = largestRaw;
+                    int maxWidth = largestRaw.getWidth();
+                    int tmp_width = maxWidth;
+                    int i = 0,minPix = 0;
+                    if((maxWidth > 1920 && maxWidth < 2100) || (maxWidth > 3840 && maxWidth < 4200) || (maxWidth > 7680 && maxWidth < 8400) || (maxWidth > 15360 && maxWidth < 16800))
+                        minPix = 1920;
+                    else
+                        minPix = 1000;
+                    while (tmp_width / 2 > minPix){
+                        i++;
+                        tmp_width = tmp_width / 2;
+                    }
+                    if (minPix == 1920)
+                        i = i + 2;
+                    else
+                        i = i + 1;
+                    rawSizeRange = new int[i];
+                    rawSizeRange[0] = maxWidth;
+                    tmp_width = maxWidth;
+                    i = 1;
+                    while (tmp_width / 2 > minPix){
+                        rawSizeRange[i] = tmp_width / 2;
+                        tmp_width = tmp_width / 2;
+                        i++;
+                    }
+                    if(minPix == 1920)
+                        rawSizeRange[i] = 1920;
+
                     if(saveJPEG){
                     /*Size largestJpeg = Collections.max(
                             Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
@@ -1365,10 +1408,6 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                         mJpegImageReader.get().setOnImageAvailableListener(mOnJpegImageAvailableListener, mBackgroundHandler);
                     }
                     if (saveRAW || saveDng){
-                        Size largestRaw = Collections.min(
-                                Arrays.asList(map.getOutputSizes(ImageFormat.RAW_SENSOR)),
-                                new CompareSizesByArea());
-
                         if (mRawImageReader == null || mRawImageReader.getAndRetain() == null) {
                             mRawImageReader = new RefCountedAutoCloseable<>(
                                     ImageReader.newInstance(largestRaw.getWidth(),
@@ -1379,6 +1418,35 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     mCharacteristics = characteristics;
                     mCameraId = cameraId;
                 }
+                if(format_now == 0){   //JPEG
+                    jpegSize = availableSize[size_now];
+                    runOnUiThread.UpdateText(R.id.text_size,JPEGSize[size_now]);
+                    photoBitSizeNow = (int)(jpegSize.getWidth() * jpegSize.getHeight() * 0.75);
+                }
+                else if (format_now == 2){   //JPEG+DNG
+                    jpegSize = availableSize[size_now];
+                    runOnUiThread.UpdateText(R.id.text_size,JPEGSize[size_now]);
+                    photoBitSizeNow = (int)(jpegSize.getWidth() * jpegSize.getHeight() * 0.75 + largestRaw.getWidth() * largestRaw.getHeight() * 2);
+                }
+                else if (format_now == 1){    //RAW
+                    if(rawSizeIndex == rawSizeRange.length - 1 && rawSizeRange[rawSizeIndex] == 1920) {     //支持1920的才显示
+                        runOnUiThread.UpdateText(R.id.text_size, "1920*1080");      //更新尺寸在UI界面
+                        photoBitSizeNow = (int)(1920 * 1080 * saveBitDepth / 8);
+                    }
+                    else{
+                        runOnUiThread.UpdateText(R.id.text_size,Integer.toString(rawSizeRange[rawSizeIndex])
+                                +"*"+Integer.toString(rawSizeRange[rawSizeIndex]/4*3));      //更新尺寸在UI界面
+                        photoBitSizeNow = (int)(rawSizeRange[rawSizeIndex] * (rawSizeRange[rawSizeIndex]/4*3) * saveBitDepth / 8);
+                    }
+                }
+                else {     //DNG
+                    runOnUiThread.UpdateText(R.id.text_size,Integer.toString(largestRaw.getWidth())
+                            +"*"+Integer.toString(largestRaw.getHeight()));      //更新尺寸在UI界面
+                    photoBitSizeNow = largestRaw.getWidth() * largestRaw.getHeight() * 2;
+                }
+                sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+                availableBytesSize = sf.getAvailableBytes();
+                runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/ photoBitSizeNow));
                 return true;
             }
         } catch (CameraAccessException e) {
@@ -1921,6 +1989,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         if(photoCount != 99999){
             dataNow = new Date();
             time_of_once_shoot = BigInteger.valueOf(dataNow.getTime());
+            Log.i(TAG,"触发时间 "+time_of_once_shoot.toString()+"ms");
             time_remove = time_of_once_shoot;
             int t = (time_of_once_shoot.subtract(time_tmp)).intValue();       //毫秒值
             BigDecimal bg = new BigDecimal(1000.0/t);
@@ -1932,7 +2001,11 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         }
         else
             photoCount = 0;
-        //clearMemory(MyApplication.getContext());
+
+        sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
+        availableBytesSize = sf.getAvailableBytes();
+        runOnUiThread.UpdateText(R.id.text_pNum,Long.toString(availableBytesSize/ photoBitSizeNow));
+
         synchronized (mCameraStateLock) {
             mPendingUserCaptures++;
 
@@ -2060,7 +2133,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         synchronized (mCameraStateLock) {
             Map.Entry<Integer, ImageSaver.ImageSaverBuilder> entry =
                     pendingQueue.firstEntry();
-            ImageSaver.ImageSaverBuilder builder = entry.getValue();
+            ImageSaver.ImageSaverBuilder builder = entry.getValue();     //entry.getValue()
 
             // 增量引用计数，以防止在后台线程中保存图像时关闭ImageReader(否则在写入文件时可能释放其资源)。
             if (reader == null || reader.getAndRetain() == null) {
@@ -2080,9 +2153,9 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 pendingQueue.remove(entry.getKey());
                 return;
             }
-
-            builder.setRefCountedReader(reader).setImage(image);
+            builder.setRefCountedReader(reader).setImage(image);            //给ImageSaver存储图片
             handleCompletionLocked(entry.getKey(), builder, pendingQueue);
+            //Log.e(TAG,"handleCompletionLocked in dequeueAndSaveImage");        //first
         }
     }
 
@@ -2137,6 +2210,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
 
         @Override
         public void run() {
+            Date dataNow = new Date();
+            //Log.i(TAG,"保存图片前时间 "+Long.toString(dataNow.getTime()));
             boolean success = false;
             int format = mImage.getFormat();
             switch (format) {
@@ -2314,8 +2389,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     else{              //保存RAW文件
                         ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
                         byte[] bytes = new byte[buffer.remaining()];
-                        byte[] bytes_low = new byte[bytes.length/4];
                         buffer.get(bytes);
+                        /*byte[] bytes_low = new byte[bytes.length/4];
                         for(int x = 0,i = 0;i < bytes_low.length;x += 8,i += 4){      //宽高的像素都减少一半，变成1984*1488
                             if(x != 0 && x % 15872 == 0 && (x / 15872) % 2 == 1) {
                                 if (x + 15872 < 23617536)
@@ -2327,12 +2402,48 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             bytes_low[i+1] = bytes[x+1];
                             bytes_low[i+2] = bytes[x+2];
                             bytes_low[i+3] = bytes[x+3];
-                        }
+                        }*/
                         buffer.clear();
                         buffer = null;
+                        byte[] bytes_toSave = null;
+                        if(realPixelDepth == 0)
+                            realPixelDepth = DetectEffectiveDepth(bytes);
+                        if(rawSizeIndex == 0)
+                            bytes_toSave = bytes;
+                        else if(rawSizeIndex == rawSizeRange.length-1 && rawSizeRange[rawSizeIndex] == 1920){
+                            if(maxRawSize.getWidth() / rawSizeRange[rawSizeIndex-1] == 2)
+                                bytes_toSave = ReducePixelsTo1920_1080(maxRawSize.getWidth()/2,maxRawSize.getHeight()/2,
+                                        ReduceHalfPixels(maxRawSize.getWidth(),maxRawSize.getHeight(),bytes));
+                            else if(maxRawSize.getWidth() / rawSizeRange[rawSizeIndex-1] == 4)
+                                bytes_toSave = ReducePixelsTo1920_1080(maxRawSize.getWidth()/4,maxRawSize.getHeight()/4,
+                                        ReduceHalfPixels(maxRawSize.getWidth()/2,maxRawSize.getHeight()/2,
+                                                ReduceHalfPixels(maxRawSize.getWidth(),maxRawSize.getHeight(),bytes)));
+                            else if(maxRawSize.getWidth() / rawSizeRange[rawSizeIndex-1] == 8)
+                                bytes_toSave = ReducePixelsTo1920_1080(maxRawSize.getWidth()/8,maxRawSize.getHeight()/8,
+                                        ReduceHalfPixels(maxRawSize.getWidth()/4,maxRawSize.getHeight()/4,
+                                                ReduceHalfPixels(maxRawSize.getWidth()/2,maxRawSize.getHeight()/2,
+                                                        ReduceHalfPixels(maxRawSize.getWidth(),maxRawSize.getHeight(),bytes))));
+                        }
+                        else {
+                            if(maxRawSize.getWidth() / rawSizeRange[rawSizeIndex] == 2)
+                                bytes_toSave = ReduceHalfPixels(maxRawSize.getWidth(),maxRawSize.getHeight(),bytes);
+                            else if(maxRawSize.getWidth() / rawSizeRange[rawSizeIndex] == 4)
+                                bytes_toSave = ReduceHalfPixels(maxRawSize.getWidth()/2,maxRawSize.getHeight()/2,
+                                        ReduceHalfPixels(maxRawSize.getWidth(),maxRawSize.getHeight(),bytes));
+                            else if(maxRawSize.getWidth() / rawSizeRange[rawSizeIndex] == 8)
+                                bytes_toSave = ReduceHalfPixels(maxRawSize.getWidth()/4,maxRawSize.getHeight()/4,
+                                        ReduceHalfPixels(maxRawSize.getWidth()/2,maxRawSize.getHeight()/2,
+                                                ReduceHalfPixels(maxRawSize.getWidth(),maxRawSize.getHeight(),bytes)));
+                        }
+                        if(saveBitDepth == 8)
+                            bytes_toSave = SwitchTo8Bit(bytes_toSave);
+                        else if(saveBitDepth == 10)
+                            bytes_toSave = SwitchTo10Bit(bytes_toSave);
+                        else if(saveBitDepth == 12)
+                            bytes_toSave = SwitchTo12Bit(bytes_toSave);
+                        //bytes_toSave = SwitchTo14Bit(bytes_toSave);
                         bytes = null;
-                        byte[] bytes_1920_1080 = new byte[1920*1080*2];
-                        int i = 0;
+                        /*int i = 0;
                         for(int y = 204;y < 1284;y++){         //用于像素减少，从1984*1488像素减少到1920*1080像素，减少存储压力
                             for(int x = 32;x < 1952;x++){
                                 if(i < bytes_1920_1080.length){
@@ -2342,8 +2453,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                                 }
                             }
                         }
-                        bytes_low = null;
-                        Date dataNow = new Date();
+                        bytes_low = null;*/
+                        dataNow = new Date();
                         BigInteger t0 = BigInteger.valueOf(dataNow.getTime());
                         BigInteger t1 = t0;
                         //Log.d(TAG,t.toString());
@@ -2353,7 +2464,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             FileOutputStream output = null;
                             try {
                                 output = new FileOutputStream(mFile);
-                                output.write(bytes_1920_1080);
+                                output.write(bytes_toSave);
                                 success = true;
                             } catch (IOException e) {
                                 e.printStackTrace();
@@ -2361,10 +2472,11 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                                 mImage.close();
                                 closeOutput(output);
                                 //buffer.clear();
-                                bytes_1920_1080 = null;
+                                bytes_toSave = null;
                                 dataNow = new Date();
                                 t1 = BigInteger.valueOf(dataNow.getTime());
                                 Log.d(TAG,"Save Time = "+(t1.subtract(t0).toString())+"ms");
+                                //Log.e(TAG,mFile.getAbsolutePath()+"  "+t1.toString()+"ms");
                                 t0 = null;
                                 t1 = null;
                                 dataNow = null;
@@ -2373,7 +2485,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             OutputStream outputStream = null;
                             try {
                                 outputStream = DocumentsUtils.getOutputStream(MyApplication.getContext(),mFile);
-                                outputStream.write(bytes_1920_1080);
+                                outputStream.write(bytes_toSave);
                                 success = true;
                             }catch (IOException e){
                                 e.printStackTrace();
@@ -2381,10 +2493,11 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                                 mImage.close();
                                 closeOutput(outputStream);
                                 //buffer.clear();
-                                bytes_1920_1080 = null;
+                                bytes_toSave = null;
                                 dataNow = new Date();
                                 t1 = BigInteger.valueOf(dataNow.getTime());
                                 Log.d(TAG,"Save Time = "+(t1.subtract(t0).toString())+"ms");
+                                //Log.e(TAG,mFile.getAbsolutePath()+"  "+t1.toString()+"ms");
                                 t0 = null;
                                 t1 = null;
                                 dataNow = null;
@@ -2403,9 +2516,6 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
 
             // If saving the file succeeded, update MediaStore.
             if (success) {
-                /*Intent i = new Intent();
-                i.setAction("com.example.android.camera2raw.s");         //发送文件保存完毕广播
-                mContext.sendBroadcast(i);*/
                 MediaScannerConnection.scanFile(mContext, new String[]{mFile.getPath()},
                 /*mimeTypes*/null, new MediaScannerConnection.MediaScannerConnectionClient() {
                     @Override
@@ -2776,7 +2886,10 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
      */
     private void handleCompletionLocked(int requestId, ImageSaver.ImageSaverBuilder builder,
                                         TreeMap<Integer, ImageSaver.ImageSaverBuilder> queue) {
-        if (builder == null) return;
+        if (builder == null){
+            //Log.e(TAG,"builder == null");
+            return;
+        }
         ImageSaver saver = builder.buildIfComplete();
         if (saver != null) {
             queue.remove(requestId);
@@ -2787,6 +2900,8 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             Log.i(TAG,"从触发takePic到移除ImageSaver所用时间 = "
                     +(BigInteger.valueOf(dataNow.getTime()).subtract(time_remove)).toString()+"ms");
         }
+        /*else
+            Log.e(TAG,"saver == null");*/
     }
 
     /**
@@ -2853,4 +2968,191 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         }
 
     }
+
+    private static byte[] ReduceHalfPixels(int width,int height,byte[] bytes_source){
+        int twoRowByteSize = width * 4;
+        int totalByteSize = width * height * 2;
+        byte[] bytes_result = new byte[bytes_source.length/4];
+        for(int x = 0,i = 0;i < bytes_source.length;x += 8,i += 4){      //宽高的像素都减少一半
+            if(x != 0 && x % twoRowByteSize == 0 && (x / twoRowByteSize) % 2 == 1) {
+                if (x + twoRowByteSize < totalByteSize)
+                    x += twoRowByteSize;
+                else
+                    break;
+            }
+            bytes_result[i] = bytes_source[x];
+            bytes_result[i+1] = bytes_source[x+1];
+            bytes_result[i+2] = bytes_source[x+2];
+            bytes_result[i+3] = bytes_source[x+3];
+        }
+        return bytes_result;
+    }
+
+    private static byte[] ReducePixelsTo1920_1080(int width,int height,byte[] bytes_source){
+        byte[] bytes_1920_1080 = new byte[1920*1080*2];
+        int i = 0, UnAndDownMargin = (height - 1080)/2, LeftAndRightMargin = (width - 1920)/2;
+        for(int y = UnAndDownMargin;y < (1080 + UnAndDownMargin);y++){         //用于像素减少，从1984*1488像素减少到1920*1080像素，减少存储压力
+            for(int x = LeftAndRightMargin;x < (LeftAndRightMargin + 1920);x++){
+                if(i < bytes_1920_1080.length){
+                    bytes_1920_1080[i] = bytes_source[2 * (width * y + x)];         //一个像素两字节赋值
+                    bytes_1920_1080[i+1] = bytes_source[2 * (width * y + x) + 1];
+                    i += 2;
+                }
+            }
+        }
+        /*for(i = 0;i < 20; i = i + 2){
+            int tmp = (bytes_1920_1080[i] & 0xFF) | (bytes_1920_1080[i+1] & 0xFF) << 8;
+            Log.e(TAG,Integer.toString(tmp));       //真正有效位深10位
+        }*/
+        return bytes_1920_1080;
+    }
+
+    private static byte[] SwitchTo8Bit(byte[] bytes_source_16){
+        byte[] bytes_8_bit = new byte[bytes_source_16.length / 2];
+        for(int i = 0; i < bytes_8_bit.length; i++){
+            int tmp = (bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8;
+            if(realPixelDepth == 16)
+                tmp = tmp / 256;
+            else if(realPixelDepth == 14)
+                tmp = tmp / 64;
+            else if(realPixelDepth == 12)
+                tmp = tmp / 16;
+            else if(realPixelDepth == 10)
+                tmp = tmp / 4;
+            bytes_8_bit[i] = (byte)tmp;       //(byte)tmp
+        }
+        return bytes_8_bit;
+    }
+
+    private static byte[] SwitchTo10Bit(byte[] bytes_source_16){
+        int size = (int)(bytes_source_16.length * 0.625);
+        byte[] bytes_10_bit = new byte[size];
+        int[] tmp_int = new int[bytes_source_16.length / 2];
+        for(int i = 0; i < tmp_int.length; i++){
+            if(realPixelDepth == 16)
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8) / 64;
+            else if(realPixelDepth == 14)
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8) / 16;
+            else if(realPixelDepth == 12)
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8) / 4;
+            else
+                tmp_int[i] = (bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8;
+        }
+        int j = 0, c = 0;
+        for(int i = 0; i < bytes_10_bit.length; i++){
+            if(c == 0)
+                bytes_10_bit[i] = (byte)tmp_int[j];   //低8
+            else if (c == 1)
+                bytes_10_bit[i] = (byte)((tmp_int[j-1] & 0x300) >> 2 | (tmp_int[j] & 0x3F));  //高2低6
+            else if (c == 2)
+                bytes_10_bit[i] = (byte)((tmp_int[j-1] & 0x3C0) >> 2 | (tmp_int[j] & 0x0F));  //高4低4
+            else if (c == 3)
+                bytes_10_bit[i] = (byte)((tmp_int[j-1] & 0x3F0) >> 2 | (tmp_int[j] & 0x03));  //高6低2
+            else if (c == 4)
+                bytes_10_bit[i] = (byte)((tmp_int[j-1] & 0x3FC) >> 2);    //高8
+            j++;
+            c++;
+            if(c == 5){
+                c = 0;
+                j--;
+            }
+        }
+        tmp_int = null;
+        return bytes_10_bit;
+    }
+
+    private static byte[] SwitchTo12Bit(byte[] bytes_source_16){
+        int size = (int)(bytes_source_16.length * 0.75);
+        byte[] bytes_12_bit = new byte[size];
+        int[] tmp_int = new int[bytes_source_16.length / 2];
+        for(int i = 0; i < tmp_int.length; i++){
+            if(realPixelDepth == 16)
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8) / 16;
+            else if(realPixelDepth == 14)
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8) / 4;
+            else
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8);
+        }
+        int j = 0, c = 0;
+        for(int i = 0; i < bytes_12_bit.length; i++){
+            if(c == 0){
+                bytes_12_bit[i] = (byte)tmp_int[j];   //低8位
+                j++;
+            }
+            else if (c == 1)
+                bytes_12_bit[i] = (byte)((tmp_int[j-1] & 0xF00) >> 4 | (tmp_int[j] & 0x00F));   //高4位低4位
+            else if (c == 2){
+                bytes_12_bit[i] = (byte)((tmp_int[j] & 0xFF0) >> 4);     //低8位
+                j++;
+            }
+            c++;
+            if(c == 3)
+                c = 0;
+        }
+        tmp_int = null;
+        return bytes_12_bit;
+    }
+
+    /*private static byte[] SwitchTo14Bit(byte[] bytes_source_16){
+        int size = (int)(bytes_source_16.length * 0.875);
+        byte[] bytes_14_bit = new byte[size];
+        int[] tmp_int = new int[bytes_source_16.length / 2];
+        for(int i = 0; i < tmp_int.length; i++){
+            if(realPixelDepth == 16)
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8) / 4;
+            else
+                tmp_int[i] = ((bytes_source_16[2 * i] & 0xFF) | (bytes_source_16[2 * i + 1] & 0xFF) << 8);
+        }
+        int j = 0, c = 0;
+        for(int i = 0; i < bytes_14_bit.length; i++){
+            if(c == 0)
+                bytes_14_bit[i] = (byte)(tmp_int[j] & 0x00FF);   //低8位
+            else if (c == 1){
+                bytes_14_bit[i] = (byte)((tmp_int[j] & 0x3F00) >> 6 | (tmp_int[j+1] & 0x0003));   //高6位低2位
+                j++;
+            }
+            else if (c == 2)
+                bytes_14_bit[i] = (byte)((tmp_int[j] & 0x03FC) >> 2);     //中8位
+            else if (c == 3){
+                bytes_14_bit[i] = (byte)((tmp_int[j] & 0x3C00) >> 6 | (tmp_int[j+1] & 0x000F));   //高4位低4位
+                j++;
+            }
+            else if (c == 4)
+                bytes_14_bit[i] = (byte)((tmp_int[j] & 0x03FC) >> 2);     //中8位
+            else if (c == 5){
+                bytes_14_bit[i] = (byte)((tmp_int[j] & 0x3000) >> 6 | (tmp_int[j+1] & 0x003F));   //高2位低6位
+                j++;
+            }
+            else if (c == 6)
+                bytes_14_bit[i] = (byte)((tmp_int[j] & 0x3FC0) >> 6);     //高8位
+            c++;
+            if(c == 7){
+                c = 0;
+                j++;
+            }
+        }
+        tmp_int = null;
+        return bytes_14_bit;
+    }*/
+
+    private static int DetectEffectiveDepth(byte[] bytes_check){
+        int maxDepth = 0;
+        for(int i = 0; i < bytes_check.length; i = i + 2){
+            int tmp = (bytes_check[i] & 0xFF) | (bytes_check[i+1] & 0xFF) << 8;
+            if(tmp > maxDepth)
+                maxDepth = tmp;
+        }
+        if(maxDepth > 0 && maxDepth < 256)
+            return 8;
+        else if (maxDepth > 0 && maxDepth < 1024)
+            return 10;
+        else if (maxDepth > 0 && maxDepth < 4096)
+            return 12;
+        else if (maxDepth > 0 && maxDepth < 16384)
+            return 14;
+        else if (maxDepth > 0 && maxDepth < 65536)
+            return 16;
+        return 0;
+    }
 }
+

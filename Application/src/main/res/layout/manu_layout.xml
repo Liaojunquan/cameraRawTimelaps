@@ -10,16 +10,18 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:text="照片保存格式"
-        android:textSize="20dp"/>
+        android:textSize="18dp"/>
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginLeft="12dp"
+        android:layout_marginRight="12dp"
         >
         <ImageButton
             android:id="@+id/format_L"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_weight="3"
             android:src="@drawable/ic_par_arrow_left"/>
         <TextView
@@ -34,7 +36,7 @@
         <ImageButton
             android:id="@+id/format_R"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_weight="3"
             android:src="@drawable/ic_par_arrow_right"/>
     </LinearLayout>
@@ -44,16 +46,18 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:text="照片大小"
-        android:textSize="20dp"/>
+        android:textSize="18dp"/>
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginLeft="12dp"
+        android:layout_marginRight="12dp"
         >
         <ImageButton
             android:id="@+id/size_L"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_weight="3"
             android:src="@drawable/ic_par_arrow_left"/>
         <TextView
@@ -68,7 +72,42 @@
         <ImageButton
             android:id="@+id/size_R"
             android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_weight="3"
+            android:src="@drawable/ic_par_arrow_right"/>
+    </LinearLayout>
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="RAW文件像素位深"
+        android:textSize="18dp"/>
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="12dp"
+        android:layout_marginRight="12dp"
+        >
+        <ImageButton
+            android:id="@+id/bitDepth_L"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_weight="3"
+            android:src="@drawable/ic_par_arrow_left"/>
+        <TextView
+            android:id="@+id/bitDepth_text"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:gravity="center"
+            android:layout_gravity="center"
+            android:textSize="25sp"
+            android:text="16"/>
+        <ImageButton
+            android:id="@+id/bitDepth_R"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
             android:layout_weight="3"
             android:src="@drawable/ic_par_arrow_right"/>
     </LinearLayout>
@@ -77,16 +116,18 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:text="存储路径"
-        android:textSize="20dp"/>
+        android:textSize="18dp"/>
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginLeft="12dp"
+        android:layout_marginRight="12dp"
         >
         <ImageButton
             android:id="@+id/path_L"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_weight="3"
             android:src="@drawable/ic_par_arrow_left"/>
         <TextView
@@ -101,7 +142,7 @@
         <ImageButton
             android:id="@+id/path_R"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_weight="3"
             android:src="@drawable/ic_par_arrow_right"/>
     </LinearLayout>
@@ -109,6 +150,7 @@
         android:id="@+id/switch_mode"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
         android:layout_gravity="center"
         android:text="极限模式Extreme Mode: "
         android:textSize="25sp"/>
@@ -118,16 +160,19 @@
         android:layout_gravity="center"
         android:text="极限模式是以设备最快速度拍摄并保存每张图片"/>
     <TextView
+        android:id="@+id/text_depth"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:text="Extreme mode is to take and save each picture at the fastest speed of the device"/>
+        android:layout_margin="5dp"
+        android:text="Output effective bit depth相机输出有效位深: unknow"
+        android:textSize="15sp"/>
     <Button
         android:id="@+id/ok"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:layout_margin="50px"
+        android:layout_margin="25px"
         android:text="OK"
         android:textSize="20sp"/>
 
