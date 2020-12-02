@@ -162,11 +162,19 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
     private int iso_now_index = 0;
     private int wb_now = 1;
     private int posX,posY,lastX,lastY;
-    //private Long SPEED[] = {1000000000L,500000000L,250000000L,125000000L,62500000L,40000000L,20000000L,10000000L,5000000L,2500000L,1250000L,1000000L,625000L,500000L,400000L,250000L};
-    //private String SPEED_STRING[] = {"1","1/2","1/4","1/8","1/16","1/25","1/50","1/100","1/200","1/400","1/800","1/1000","1/1600","1/2000","1/2500","1/4000"};
+    /*private Long SPEED[] = {125000L,142860L,166670L,200000L,250000L,333330L,400000L,500000L,666660L,1000000L,1250000L,2000000L,
+            2500000L,4000000L,5000000L,8000000L,10000000L,12500000L,16666660L,20000000L,25000000L,33333330L,40000000L,50000000L,66666660L,
+            100000000L,125000000L,250000000L,500000000L,1000000000L,2000000000L,3000000000L,4000000000L,5000000000L,6000000000L,7000000000L,
+            8000000000L,9000000000L,10000000000L,12000000000L,15000000000L,20000000000L,25000000000L,30000000000L,40000000000L,
+            50000000000L,60000000000L,};
+    private String SPEED_STRING[] = {"1/8000","1/7000","1/6000","1/5000","1/4000","1/3000","1/2500","1/2000","1/1500","1/1000","1/800", "1/500",
+            "1/400","1/250", "1/200","1/125","1/100","1/80","1/60","1/50","1/40","1/30","1/25","1/20","1/15",
+            "1/10","1/8","1/4","1/2","1","2","3","4","5","6","7",
+            "8","9","10","12","15","20","25","30","40",
+            "50","60"};*/
     private Long SPEED = 40000000L;
     private float nowFocusDistant = 10.0f;
-    //private int speed_now_index = 5;
+    //private int speed_now_index = 22;
     public boolean shoot = false;
     private int photoCount;
     private int interval = 1;
@@ -263,6 +271,40 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     /*sf = new StatFs(getContext().getCacheDir().getAbsolutePath());
                     availableBytesSize = sf.getAvailableBytes();*/
                     //Log.e(TAG,"Byte Sub "+Long.toString(tmpleByteSize - availableBytesSize));
+                    /*if(isExtremeMode && isLock && speed_now_index > 25){
+                        File f = null;
+                        if(saveJPEG && !saveRAW && !saveDng)
+                            f = new File(savePath + "/JPEG_" + getFrameNumString() + ".jpg");
+                        else if (!saveJPEG && saveRAW && !saveDng){
+                            if(saveBitDepth == 8)
+                                f = new File(savePath + "/RAW_" + getFrameNumString() + ".raw8");
+                            else if(saveBitDepth == 10)
+                                f = new File(savePath + "/RAW_" + getFrameNumString() + ".raw10");
+                            else if(saveBitDepth == 12)
+                                f = new File(savePath + "/RAW_" + getFrameNumString() + ".raw12");
+                            else if(saveBitDepth == 16)
+                                f = new File(savePath + "/RAW_" + getFrameNumString() + ".raw16");
+                        }
+                        else if (!saveRAW && saveDng)
+                            f = new File(savePath + "/DNG_" + getFrameNumString() + ".dng");
+                        if(f.exists()){
+                            FileInputStream file_size_test = null;
+                            int size = 0;
+                            try{
+                                file_size_test = new FileInputStream(f);
+                                size = file_size_test.available();
+                            } catch (IOException e){
+                                e.printStackTrace();
+                            } finally {
+                                closeInput(file_size_test);
+                                f = null;
+                            }
+                            if(size > 0){
+                                takePicture();
+                                //Log.d(TAG,"触发");
+                            }
+                        }
+                    }*/
                     if(isExtremeMode){               //极限模式Extreme mode
                         if(saveDng){
                             File f = new File(savePath + "/DNG_" + getFrameNumString() + ".dng");
@@ -357,19 +399,57 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         }).start();
     }
 
+    /*private void gradualChangeSpeed(final boolean increase){
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Long tmp = 0L;
+                if(increase)
+                    tmp = (SPEED[speed_now_index] - SPEED[speed_now_index - 1]) / 4L;
+                else
+                    tmp = (SPEED[speed_now_index + 1] - SPEED[speed_now_index]) / 4L;
+                for(int i = 0; i < 4; i++){
+                    if(increase){
+                        mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,SPEED[speed_now_index-1] + i * tmp);
+                    }
+                    else {
+                        mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,SPEED[speed_now_index+1] - i * tmp);
+                    }
+                    try {
+                        mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
+                                mBackgroundHandler);
+                    }catch (CameraAccessException e){
+                        e.printStackTrace();
+                    }
+                    try {
+                        Thread.sleep(250);
+                    }catch (InterruptedException e){
+                        e.printStackTrace();
+                    }
+                }
+                Thread.interrupted();
+            }
+        }).start();
+    }*/
+
     private String LongToString(Long speed){        //快门速度转换
-        //double s_d = 1000000000L/speed;
-        //int s_i = (int)s_d;
-        String s_s = Long.toString(1000000000L/speed);
-        //String[] integer = s_s.split();
-        /*if(s_i == 1){
-            s_s = Integer.toString(s_i);
+        String s_s = "";
+        try {
+            s_s = Long.toString(1000000000L/speed);
+        }catch (Exception e){
+            return "error";
         }
-        else{
-            s_s = "1/" + Integer.toString(s_i);
-        }*/
-        Log.d(TAG,s_s);
+        //Log.d(TAG,s_s);
         return "1/"+s_s;
+        /*else {          //大于等于1s
+            try {
+                s_s = Long.toString(speed/1000000000L);
+            }catch (Exception e){
+                return "error";
+            }
+            Log.d(TAG,s_s);
+            return s_s;
+        }*/
     }
 
     /*public void clearMemory(Context context) {
@@ -493,10 +573,10 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 // Start the preview session if the TextureView has been set up already.
                 if (mPreviewSize != null && mTextureView.isAvailable()) {
                     createCameraPreviewSessionLocked();           //mState=STATE_PREVIEW
-                    mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, SPEED);    //单位:纳秒ns
+                    /*mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, SPEED);    //单位:纳秒ns
                     mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,ISO[iso_now_index]);   //ISO2000
                     mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
-                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, wb_now);
+                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, wb_now);*/
                     try {
                         mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
                                 mBackgroundHandler);
@@ -701,7 +781,6 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
         @Override
         public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                        TotalCaptureResult result) {
-            //isSaveFinished = true;
             int requestId = (int) request.getTag();
             if(saveJPEG){
                 ImageSaver.ImageSaverBuilder jpegBuilder;
@@ -825,35 +904,62 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                         case MotionEvent.ACTION_MOVE:
                             posX = (int)event.getX();
                             posY = (int)event.getY();
-                            if(posY < 500){
+                            if(mPreviewSize != null && posY < (mPreviewSize.getWidth() * 0.65)){
                             /*if((posX - lastX) > 5 && speed_now_index > 0)
                                 speed_now_index--;
                             else if((posX - lastX) < -5 && speed_now_index < SPEED.length-1)
                                 speed_now_index++;
                             runOnUiThread.UpdateText(R.id.speed_text,SPEED_STRING[speed_now_index]);*/
-                                if((posX - lastX) > 8 && SPEED < 1000000000L) {     //小于1s
-                                    if(SPEED>10000000L)
-                                        SPEED = SPEED + 1000000L;
-                                    else
-                                        SPEED = SPEED + 50000L;
+                                if((posX - lastX) > 10) {
+                                    //Log.i(TAG,"增加");
+                                    /*if(SPEED > 20000000000L)                           //  大于20s
+                                        SPEED = SPEED + 5000000000L;  //5秒步进
+                                    if(SPEED > 10000000000L && SPEED <= 20000000000L)   //  大于10s小于等于20s
+                                        SPEED = SPEED + 2000000000L;  //2秒步进
+                                    if(SPEED >= 1000000000L && SPEED <= 10000000000L)   //  大于等于1s小于等于10秒
+                                        SPEED = SPEED + 1000000000L;      //1秒步进
+                                    if(SPEED > 100000000L && SPEED < 1000000000L)     //  大于1/10s小于1s
+                                        SPEED = SPEED + 10000000L;    //  1/100s步进*/
+                                    if(SPEED > 10000000L && SPEED < 100000000L)       //  大于1/100s小于1/10s
+                                        SPEED = SPEED + 1000000L;    //  1/1000s步进
+                                    if(SPEED >= 100000L && SPEED <= 10000000L)          //大于等于1/10000s小于等于1/100s
+                                        SPEED = SPEED + 50000L;     // 1/20000步进
                                 }
-                                else if ((posX - lastX) < -8 && SPEED > 250000L) {  //大于1/40000s
-                                    if(SPEED>10000000L)
-                                        SPEED = SPEED - 1000000L;
-                                    else
-                                        SPEED = SPEED - 50000L;
+                                else if ((posX - lastX) < -10) {  //大于1/20000s
+                                    //Log.i(TAG,"减少");
+                                    /*if(SPEED > 20000000000L)                           //  大于20s
+                                        SPEED = SPEED - 5000000000L;  //5秒步进
+                                    if(SPEED > 10000000000L && SPEED <= 20000000000L)   //  大于10s小于等于20s
+                                        SPEED = SPEED - 2000000000L;  //2秒步进
+                                    if(SPEED >= 1000000000L && SPEED <= 10000000000L)   //  大于等于1s小于等于10秒
+                                        SPEED = SPEED - 1000000000L;      //1秒步进
+                                    if(SPEED > 100000000L && SPEED < 1000000000L)     //  大于1/10s小于1s
+                                        SPEED = SPEED - 10000000L;    //  1/100s步进*/
+                                    if(SPEED > 10000000L && SPEED <= 100000000L)     //  大于1/100s小于等于1/10s
+                                        SPEED = SPEED - 1000000L;    //  1/1000s步进
+                                    if(SPEED > 100000L && SPEED <= 10000000L)           //大于1/10000s小于等于1/100s
+                                        SPEED = SPEED - 50000L;     // 1/20000步进
                                 }
                                 runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
                                 mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,SPEED);
-                            }else {
+                                /*if (speed_now_index >= 29 && !isExtremeMode){
+                                    int tmp = (int)(SPEED[speed_now_index] / 1000000000L);
+                                    if(interval <= tmp){
+                                        interval = tmp + 1;
+                                        String s = "间隔" + Integer.toString(interval) + "s";
+                                        runOnUiThread.UpdateText(R.id.interval_text, s);
+                                        runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
+                                    }
+                                }*/
+                            }else if(mPreviewSize != null && posY >= (mPreviewSize.getWidth() * 0.6)){
                                 if((posX - lastX) > 1 && nowFocusDistant > 0.0f)
                                     nowFocusDistant -= 0.07f;
                                 else if((posX - lastX) < -1 && nowFocusDistant < 10.0f)
                                     nowFocusDistant += 0.07f;
                                 mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
                             }
-                            Log.d(TAG,"speed "+Long.toString(SPEED));
-                            Log.d(TAG,"Distant "+Float.toString(nowFocusDistant));
+                            //Log.d(TAG,"speed "+Long.toString(SPEED));
+                            //Log.d(TAG,"Distant "+Float.toString(nowFocusDistant));
                             lastX = posX;
                             lastY = posY;
                             try {
@@ -1074,12 +1180,16 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                     if(shoot && activity != null){
                         shoot = false;
                         StartAndStopButton.setText("START");
-                        runOnUiThread.UpdateText(R.id.text_time,Integer.toString(interval));
+                        if(isExtremeMode)
+                            runOnUiThread.UpdateText(R.id.text_time,"0"); //0fps
+                        else
+                            runOnUiThread.UpdateText(R.id.text_time,Integer.toString(interval));
                         Log.d(TAG,"停止服务意图");
                     }
                     else if(!shoot && activity != null){
                         shoot = true;
                         StartAndStopButton.setText("STOP");
+                        //createCameraPreviewSessionLocked();
                         startTimelaps();
                         if(!isExtremeMode)
                             countDown();
@@ -1100,26 +1210,18 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                             runOnUiThread.UpdateText(R.id.iso_text,Integer.toString(ISO[iso_now_index]));
                             runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
                             runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
-                            createCameraPreviewSessionLocked();
-                            try{
-                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, SPEED);    //单位:纳秒ns
-                                mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,ISO[iso_now_index]);   //ISO2000
-                                mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, wb_now);  //CONTROL_AWB_MODE_OFF
-                                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mPreCaptureCallback,
-                                        mBackgroundHandler);
-                            }catch (Exception e){
-                                e.printStackTrace();
-                            }
+                            nowFocusDistant = mPreviewRequestBuilder.get(CaptureRequest.LENS_FOCUS_DISTANCE);  //获取自动模式时的对焦距离
+                            createCameraPreviewSessionLocked();       //更新预览
                         }
                         else{
                             AutoOrManual.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_m));
                             isLock = false;
                             showToast("自动模式");
+                            wb_now = mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AWB_MODE);       //获取手动模式时的白平衡
                             runOnUiThread.UpdateText(R.id.iso_text,"");
                             runOnUiThread.UpdateText(R.id.wb_text,"");
                             runOnUiThread.UpdateText(R.id.speed_text,"");
-                            createCameraPreviewSessionLocked();
+                            createCameraPreviewSessionLocked();      //更新预览
                         }
                     }
                 }
@@ -1192,16 +1294,19 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                 break;
             }
             case R.id.interval_button_plus: {
-                if(!shoot && !isExtremeMode)
-                    interval++;
+                if(!shoot && !isExtremeMode){
+                        interval++;
+                }
                 String s = "间隔" + Integer.toString(interval) + "s";
                 runOnUiThread.UpdateText(R.id.interval_text, s);
                 runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
                 break;
             }
             case R.id.interval_button_sub: {
-                if (interval > 1 && !shoot && !isExtremeMode)
-                    interval--;
+                if (!shoot && !isExtremeMode){
+                    if (interval > 1)
+                        interval--;
+                }
                 String s = "间隔" + Integer.toString(interval) + "s";
                 runOnUiThread.UpdateText(R.id.interval_text, s);
                 runOnUiThread.UpdateText(R.id.text_time, Integer.toString(interval));
@@ -1266,7 +1371,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             default:
                 break;
         }
-        if(!isLock){
+        /*if(!isLock){
             showToast("自动模式");
             runOnUiThread.UpdateText(R.id.iso_text,"");
             runOnUiThread.UpdateText(R.id.wb_text,"");
@@ -1277,7 +1382,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
             runOnUiThread.UpdateText(R.id.iso_text,Integer.toString(ISO[iso_now_index]));
             runOnUiThread.UpdateText(R.id.wb_text,WB[wb_now]);
             runOnUiThread.UpdateText(R.id.speed_text,LongToString(SPEED));
-        }
+        }*/
     }
     class RunOnUiThread extends AppCompatActivity{
         private void UpdateText(final int Id,final String str){
@@ -1644,9 +1749,7 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                                     }
                                     try {
                                         setup3AControlsLocked(mPreviewRequestBuilder);
-                                        // Finally, we start displaying the camera preview.
-                                        cameraCaptureSession.setRepeatingRequest(
-                                                mPreviewRequestBuilder.build(),
+                                        cameraCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                                                 mPreCaptureCallback, mBackgroundHandler);
                                         mState = STATE_PREVIEW;
                                     } catch (CameraAccessException | IllegalStateException e) {
@@ -1840,12 +1943,33 @@ public class Camera2RawFragment extends Fragment implements View.OnClickListener
                         CaptureRequest.CONTROL_AWB_MODE_AUTO);
             }
         }*/
-        if (contains(mCharacteristics.get(
-                CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES),
-                CaptureRequest.CONTROL_AWB_MODE_AUTO)) {
-            // Allow AWB to run auto-magically if this device supports this
-            builder.set(CaptureRequest.CONTROL_AWB_MODE,
-                    CaptureRequest.CONTROL_AWB_MODE_AUTO);
+        if(isLock){
+            if (contains(mCharacteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES),
+                    CaptureRequest.CONTROL_AWB_MODE_OFF)) {
+                // Allow AWB to run auto-magically if this device supports this
+                builder.set(CaptureRequest.CONTROL_AWB_MODE,
+                        CaptureRequest.CONTROL_AWB_MODE_OFF);
+            }
+            else {
+                builder.set(CaptureRequest.CONTROL_AWB_MODE,
+                        CaptureRequest.CONTROL_AWB_MODE_OFF);
+            }
+            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,SPEED);
+            builder.set(CaptureRequest.SENSOR_SENSITIVITY,ISO[iso_now_index]);   //ISO2000
+            builder.set(CaptureRequest.LENS_FOCUS_DISTANCE,nowFocusDistant);
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, wb_now);  //CONTROL_AWB_MODE_OFF
+        }
+        else {
+            if (contains(mCharacteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES),
+                    CaptureRequest.CONTROL_AWB_MODE_AUTO)) {
+                // Allow AWB to run auto-magically if this device supports this
+                builder.set(CaptureRequest.CONTROL_AWB_MODE,
+                        CaptureRequest.CONTROL_AWB_MODE_AUTO);
+            }
+            else {
+                builder.set(CaptureRequest.CONTROL_AWB_MODE,
+                        CaptureRequest.CONTROL_AWB_MODE_AUTO);
+            }
         }
         /*builder.set(CaptureRequest.SENSOR_SENSITIVITY,2000);
         Float minFocusDist = mCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
